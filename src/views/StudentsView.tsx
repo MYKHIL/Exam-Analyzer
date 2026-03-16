@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Student, Subject, GradeScale } from '../types';
 import { resolveGrade, calculateStudentAggregate } from '../utils';
-import { Plus, Trash2, Search, Upload, Download, FileSpreadsheet } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { Plus, Trash2, Search, Download, FileSpreadsheet } from 'lucide-react';
+import { downloadTemplate, processExcelFile } from '../excelUtils';
 
 export default function StudentsView({ 
   students, setStudents, subjects, gradeScales 
@@ -61,84 +61,8 @@ export default function StudentsView({
   const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const bstr = evt.target?.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws) as any[];
-
-      let newStudents = [...students];
-
-      data.forEach(row => {
-        const name = row['Name'] || row['name'] || row['Student Name'] || row['Student'];
-        const sexRaw = row['Sex'] || row['sex'] || row['Gender'] || row['gender'];
-        const sex = (sexRaw && sexRaw.toString().toUpperCase().startsWith('F')) ? 'F' : 'M';
-        
-        if (!name) return;
-
-        // Find or create student
-        let student = newStudents.find(s => s.name.toLowerCase() === name.toLowerCase());
-        if (!student) {
-          student = { id: crypto.randomUUID(), name: name, sex: sex, scores: {} };
-          newStudents.push(student);
-        }
-
-        // Check for grid format (subjects as columns)
-        subjects.forEach(sub => {
-          const scoreVal = row[sub.name];
-          if (scoreVal !== undefined) {
-            const score = parseFloat(scoreVal);
-            if (!isNaN(score)) {
-              student!.scores[sub.id] = score;
-            } else if (typeof scoreVal === 'string' && scoreVal.trim() !== '') {
-              student!.scores[sub.id] = scoreVal.trim();
-            }
-          }
-        });
-
-        // Check for row format (Subject and Score columns)
-        const subjectName = row['Subject'] || row['subject'];
-        const scoreStr = row['Score'] || row['score'];
-        if (subjectName && scoreStr !== undefined) {
-          const subject = subjects.find(s => s.name.toLowerCase() === subjectName.toLowerCase());
-          if (subject) {
-            const score = parseFloat(scoreStr);
-            if (!isNaN(score)) {
-              student.scores[subject.id] = score;
-            } else if (typeof scoreStr === 'string' && scoreStr.trim() !== '') {
-              student.scores[subject.id] = scoreStr.trim();
-            }
-          }
-        }
-      });
-
-      setStudents(newStudents);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const handleDownloadTemplate = () => {
-    const templateData = [
-      {
-        'Name': 'John Doe',
-        'Sex': 'M',
-        ...subjects.reduce((acc, sub) => ({ ...acc, [sub.name]: 75 }), {})
-      },
-      {
-        'Name': 'Jane Smith',
-        'Sex': 'F',
-        ...subjects.reduce((acc, sub) => ({ ...acc, [sub.name]: 82 }), {})
-      }
-    ];
-
-    const ws = XLSX.utils.json_to_sheet(templateData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Template");
-    XLSX.writeFile(wb, "student_scores_template.xlsx");
+    processExcelFile(file, subjects, students, setStudents);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const filteredStudents = students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -159,7 +83,7 @@ export default function StudentsView({
             onChange={handleImportExcel}
           />
           <button 
-            onClick={handleDownloadTemplate}
+            onClick={() => downloadTemplate(subjects)}
             className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"
           >
             <Download className="w-4 h-4" /> Template

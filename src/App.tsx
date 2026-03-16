@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, ChangeEvent } from 'react';
 import { GradeScale, Subject, Student } from './types';
 import { DEFAULT_GRADE_SCALES, DEFAULT_SUBJECTS, DEFAULT_STUDENTS } from './constants';
 import Sidebar from './components/Sidebar';
@@ -12,20 +12,42 @@ import StudentsView from './views/StudentsView';
 import AnalysisView from './views/AnalysisView';
 import DashboardView from './views/DashboardView';
 import ReportsView from './views/ReportsView';
+import GuideModal from './components/GuideModal';
+import { downloadTemplate, processExcelFile } from './excelUtils';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [gradeScales, setGradeScales] = useState<GradeScale[]>(DEFAULT_GRADE_SCALES);
   const [subjects, setSubjects] = useState<Subject[]>(DEFAULT_SUBJECTS);
   const [students, setStudents] = useState<Student[]>(DEFAULT_STUDENTS);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [aggRangeMin, setAggRangeMin] = useState<number>(6);
   const [aggRangeMax, setAggRangeMax] = useState<number>(36);
   const [subjRanges, setSubjRanges] = useState<{id: string, min: number, max: number}[]>([{id: '1', min: 1, max: 6}]);
 
+  useEffect(() => {
+    // Show guide on first open if no students
+    if (students.length === 0) {
+      setIsGuideOpen(true);
+    }
+  }, []);
+
+  const handleImportExcel = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processExcelFile(file, subjects, students, (updatedStudents) => {
+      setStudents(updatedStudents);
+      setIsGuideOpen(false);
+      setActiveTab('students');
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
     <div className="flex h-screen bg-gray-50 font-sans text-gray-900">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onShowGuide={() => setIsGuideOpen(true)} />
       <main className="flex-1 overflow-y-auto p-8">
         {activeTab === 'dashboard' && (
           <DashboardView students={students} subjects={subjects} gradeScales={gradeScales} />
@@ -57,6 +79,21 @@ export default function App() {
           />
         )}
       </main>
+
+      <input 
+        type="file" 
+        accept=".xlsx, .xls" 
+        className="hidden" 
+        ref={fileInputRef}
+        onChange={handleImportExcel}
+      />
+
+      <GuideModal 
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        onDownloadTemplate={() => downloadTemplate(subjects)}
+        onImportExcel={() => fileInputRef.current?.click()}
+      />
     </div>
   );
 }

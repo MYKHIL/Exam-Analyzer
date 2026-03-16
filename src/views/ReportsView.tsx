@@ -135,6 +135,18 @@ export default function ReportsView({
     });
 
     const ws = XLSX.utils.json_to_sheet(data);
+
+    // Set column widths
+    const wscols = [
+      { wch: 25 }, // Student Name
+      { wch: 10 }, // Sex
+      { wch: 15 }, // Total Score
+      { wch: 15 }, // Average Score
+      { wch: 15 }, // Aggregate Points
+      ...subjects.map(() => ({ wch: 15 })) // Subjects
+    ];
+    ws['!cols'] = wscols;
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Exam Report");
     XLSX.writeFile(wb, "exam_report.xlsx");

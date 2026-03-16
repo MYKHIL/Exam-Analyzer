@@ -1,6 +1,14 @@
-import { LayoutDashboard, Settings, Users, BarChart3, FileText } from 'lucide-react';
+import { LayoutDashboard, Settings, Users, BarChart3, FileText, HelpCircle } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
+export default function Sidebar({ 
+  activeTab, 
+  setActiveTab,
+  onShowGuide
+}: { 
+  activeTab: string, 
+  setActiveTab: (t: string) => void,
+  onShowGuide: () => void
+}) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'students', label: 'Students & Scores', icon: Users },
@@ -33,6 +41,15 @@ export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string
           </button>
         ))}
       </nav>
+      <div className="p-4 border-t border-gray-200">
+        <button
+          onClick={onShowGuide}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+        >
+          <HelpCircle className="w-5 h-5 text-gray-400" />
+          How to use
+        </button>
+      </div>
     </div>
   );
 }

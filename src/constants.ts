@@ -25,32 +25,4 @@ export const DEFAULT_SUBJECTS: Subject[] = [
   { id: 's10', name: 'French', type: 'elective' },
 ];
 
-export const DEFAULT_STUDENTS: Student[] = [
-  { 
-    id: 'st1', 
-    name: 'Alice Johnson', 
-    sex: 'F', 
-    scores: { 
-      's1': 85, 's2': 78, 's3': 92, 's4': 80, 
-      's5': 88, 's6': 95, 's7': 70, 's8': 82, 's9': 90, 's10': 75 
-    } 
-  },
-  { 
-    id: 'st2', 
-    name: 'Bob Smith', 
-    sex: 'M', 
-    scores: { 
-      's1': 62, 's2': 55, 's3': 70, 's4': 65, 
-      's5': 45, 's6': 60, 's7': 58, 's8': 72, 's9': 68, 's10': 50 
-    } 
-  },
-  { 
-    id: 'st3', 
-    name: 'Charlie Brown', 
-    sex: 'M', 
-    scores: { 
-      's1': 45, 's2': 60, 's3': 58, 's4': 55, 
-      's5': 90, 's6': 85, 's7': 92, 's8': 88, 's9': 80, 's10': 95 
-    } 
-  },
-];
+export const DEFAULT_STUDENTS: Student[] = [];
