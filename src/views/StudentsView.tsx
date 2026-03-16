@@ -14,7 +14,12 @@ export default function StudentsView({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddStudent = () => {
-    setStudents([...students, { id: crypto.randomUUID(), name: 'New Student', sex: 'M', scores: {} }]);
+    const hasEmptyName = students.some(s => !s.name.trim());
+    if (hasEmptyName) {
+      alert('Please enter a name for all existing students before adding a new one.');
+      return;
+    }
+    setStudents([...students, { id: crypto.randomUUID(), name: '', sex: 'M', scores: {} }]);
   };
 
   const handleRemoveStudent = (id: string) => {
@@ -154,6 +159,7 @@ export default function StudentsView({
                         <input 
                           type="text"
                           value={student.name}
+                          placeholder="Enter student name"
                           onChange={(e) => handleUpdateStudentName(student.id, e.target.value)}
                           className="w-full h-full p-4 bg-transparent outline-none focus:bg-indigo-50 font-medium text-gray-900"
                         />
@@ -226,6 +232,7 @@ export default function StudentsView({
                       <input 
                         type="text"
                         value={student.name}
+                        placeholder="Enter student name"
                         onChange={(e) => handleUpdateStudentName(student.id, e.target.value)}
                         className="w-full text-lg font-bold text-gray-900 bg-transparent border-b border-transparent focus:border-indigo-500 outline-none"
                       />

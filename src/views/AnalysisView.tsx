@@ -151,7 +151,7 @@ export default function AnalysisView({
 
       {analysisType === 'aggregate' && (
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <h3 className="text-lg font-semibold text-gray-900">Aggregate Analysis</h3>
               <div className="flex items-center gap-2">
@@ -172,7 +172,8 @@ export default function AnalysisView({
               </div>
             </div>
 
-            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse whitespace-nowrap min-w-[600px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
@@ -205,49 +206,90 @@ export default function AnalysisView({
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-4">
+              {['M', 'F'].map(sex => {
+                const data = aggregateAnalysisData[sex as 'M' | 'F'];
+                const passCount = Object.values(data.counts).reduce((a: number, b: number) => a + b, 0) as number;
+                const passPercentage = data.total > 0 ? ((passCount / data.total) * 100).toFixed(1) : '0.0';
+                const aboveAggCount = data.total - passCount;
+
+                return (
+                  <div key={sex} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="font-bold text-gray-900">{sex === 'M' ? 'Male' : 'Female'}</span>
+                      <span className="text-xs text-gray-500">Total: {data.total}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-white p-2 rounded-lg border border-gray-100 text-center">
+                        <p className="text-[10px] text-gray-500 uppercase font-bold">Pass %</p>
+                        <p className="text-lg font-bold text-indigo-600">{passPercentage}%</p>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-gray-100 text-center">
+                        <p className="text-[10px] text-gray-500 uppercase font-bold">Above {aggRangeMax}</p>
+                        <p className="text-lg font-bold text-rose-600">{aboveAggCount}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold text-gray-700">Aggregate Distribution:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {Array.from({ length: aggRangeMax - aggRangeMin + 1 }, (_, i) => aggRangeMin + i).map(agg => (
+                          <div key={agg} className="flex flex-col items-center bg-white px-2 py-1 rounded border border-gray-100 min-w-[40px]">
+                            <span className="text-[9px] text-gray-400">Agg {agg}</span>
+                            <span className="text-xs font-bold">{data.counts[agg]}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
 
       {analysisType === 'subject' && (
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">Subject Summary Table</h3>
-              <div className="flex flex-wrap items-center gap-3">
+              <h3 className="text-lg font-semibold text-gray-900">Subject Summary</h3>
+              <div className="flex flex-wrap items-center gap-2">
                 {subjRanges.map((range, idx) => (
-                  <div key={range.id} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
-                    <span className="text-xs font-medium text-gray-500">Range {idx + 1}:</span>
+                  <div key={range.id} className="flex items-center gap-1 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
+                    <span className="text-[10px] font-medium text-gray-500">R{idx + 1}:</span>
                     <input 
                       type="number" 
                       value={range.min} 
                       onChange={e => updateSubjRange(range.id, 'min', Number(e.target.value))}
-                      className="w-12 px-1 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-xs"
+                      className="w-10 px-1 py-0.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-[10px]"
                     />
-                    <span className="text-xs text-gray-500">-</span>
+                    <span className="text-[10px] text-gray-500">-</span>
                     <input 
                       type="number" 
                       value={range.max} 
                       onChange={e => updateSubjRange(range.id, 'max', Number(e.target.value))}
-                      className="w-12 px-1 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-xs"
+                      className="w-10 px-1 py-0.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-[10px]"
                     />
                     {subjRanges.length > 1 && (
-                      <button onClick={() => removeSubjRange(range.id)} className="text-rose-500 hover:text-rose-700 p-1">
-                        <Trash2 size={14} />
+                      <button onClick={() => removeSubjRange(range.id)} className="text-rose-500 hover:text-rose-700">
+                        <Trash2 size={12} />
                       </button>
                     )}
                   </div>
                 ))}
                 <button 
                   onClick={addSubjRange}
-                  className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium px-2 py-1 bg-indigo-50 rounded-lg"
+                  className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium px-2 py-1 bg-indigo-50 rounded-lg"
                 >
-                  <Plus size={16} /> Add Range
+                  <Plus size={14} /> Add
                 </button>
               </div>
             </div>
 
-            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
@@ -300,6 +342,49 @@ export default function AnalysisView({
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-4">
+              {subjectSummaryData.map(row => (
+                <div key={row.subject} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                  <h4 className="font-bold text-gray-900 mb-3 border-b border-gray-200 pb-2">{row.subject}</h4>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="bg-white p-2 rounded-lg border border-gray-100">
+                      <p className="text-[10px] text-gray-500 uppercase font-bold text-center mb-1">Total</p>
+                      <div className="flex justify-around">
+                        <div className="text-center"><span className="text-[9px] text-gray-400 block">M</span><span className="font-bold">{row.total.M}</span></div>
+                        <div className="text-center"><span className="text-[9px] text-gray-400 block">F</span><span className="font-bold">{row.total.F}</span></div>
+                      </div>
+                    </div>
+                    {subjRanges.map((r, idx) => (
+                      <div key={r.id} className="bg-indigo-50 p-2 rounded-lg border border-indigo-100">
+                        <p className="text-[10px] text-indigo-600 uppercase font-bold text-center mb-1">Range {idx + 1}</p>
+                        <div className="flex justify-around">
+                          <div className="text-center"><span className="text-[9px] text-indigo-400 block">M</span><span className="font-bold text-indigo-700">{row.ranges[r.id].M}</span></div>
+                          <div className="text-center"><span className="text-[9px] text-indigo-400 block">F</span><span className="font-bold text-indigo-700">{row.ranges[r.id].F}</span></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-gray-500 uppercase font-bold">Grade Distribution:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {gradeScales.map(g => (
+                        <div key={g.id} className="bg-white px-2 py-1 rounded border border-gray-100 min-w-[60px]">
+                          <p className="text-[9px] text-gray-400 text-center border-b border-gray-50 mb-1">G{g.grade}</p>
+                          <div className="flex justify-between gap-2">
+                            <span className="text-[10px] font-medium text-blue-600">M:{row.grades[g.grade].M}</span>
+                            <span className="text-[10px] font-medium text-pink-600">F:{row.grades[g.grade].F}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6">
@@ -333,68 +418,95 @@ export default function AnalysisView({
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <div>
-                    <h4 className="text-md font-medium text-gray-700 mb-4 text-center">Top 2 Performers</h4>
-                    <div className="space-y-3">
-                      {students
-                        .filter(s => s.scores[selectedSubjectId] !== undefined && s.scores[selectedSubjectId] !== '')
-                        .sort((a, b) => {
-                          const valA = typeof a.scores[selectedSubjectId] === 'number' ? a.scores[selectedSubjectId] as number : parseFloat(a.scores[selectedSubjectId] as string);
-                          const valB = typeof b.scores[selectedSubjectId] === 'number' ? b.scores[selectedSubjectId] as number : parseFloat(b.scores[selectedSubjectId] as string);
-                          return (valB || 0) - (valA || 0);
-                        })
-                        .slice(0, 2)
-                        .map((student, idx) => (
-                          <div key={student.id} className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-                            <div className="flex items-center gap-3">
-                              <span className="w-6 h-6 rounded-full bg-emerald-200 text-emerald-800 flex items-center justify-center text-xs font-bold">
-                                {idx + 1}
-                              </span>
-                              <span className="font-medium text-gray-900">{student.name}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-gray-900">{student.scores[selectedSubjectId]}</span>
-                              <span className="text-xs font-bold px-2 py-1 bg-emerald-200 text-emerald-800 rounded">
-                                {resolveGrade(student.scores[selectedSubjectId], gradeScales)?.grade || '-'}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      {students.filter(s => s.scores[selectedSubjectId] !== undefined && s.scores[selectedSubjectId] !== '').length === 0 && (
-                        <p className="text-gray-500 text-sm text-center">No scores recorded.</p>
-                      )}
+                    <h4 className="text-md font-medium text-gray-700 mb-4 text-center">Grade Distribution</h4>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={subjectAnalysisData.gradeDistribution}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {subjectAnalysisData.gradeDistribution.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend verticalAlign="bottom" height={36}/>
+                        </PieChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
-                  
-                  <div>
-                    <h4 className="text-md font-medium text-gray-700 mb-4 text-center">Bottom 2 Performers</h4>
-                    <div className="space-y-3">
-                      {students
-                        .filter(s => s.scores[selectedSubjectId] !== undefined && s.scores[selectedSubjectId] !== '')
-                        .sort((a, b) => {
-                          const valA = typeof a.scores[selectedSubjectId] === 'number' ? a.scores[selectedSubjectId] as number : parseFloat(a.scores[selectedSubjectId] as string);
-                          const valB = typeof b.scores[selectedSubjectId] === 'number' ? b.scores[selectedSubjectId] as number : parseFloat(b.scores[selectedSubjectId] as string);
-                          return (valA || 0) - (valB || 0);
-                        })
-                        .slice(0, 2)
-                        .map((student, idx) => (
-                          <div key={student.id} className="flex items-center justify-between p-3 bg-rose-50 rounded-lg border border-rose-100">
-                            <div className="flex items-center gap-3">
-                              <span className="w-6 h-6 rounded-full bg-rose-200 text-rose-800 flex items-center justify-center text-xs font-bold">
-                                {idx + 1}
-                              </span>
-                              <span className="font-medium text-gray-900">{student.name}</span>
+
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-md font-medium text-gray-700 mb-4 text-center">Top 2 Performers</h4>
+                      <div className="space-y-3">
+                        {students
+                          .filter(s => s.scores[selectedSubjectId] !== undefined && s.scores[selectedSubjectId] !== '')
+                          .sort((a, b) => {
+                            const valA = typeof a.scores[selectedSubjectId] === 'number' ? a.scores[selectedSubjectId] as number : parseFloat(a.scores[selectedSubjectId] as string);
+                            const valB = typeof b.scores[selectedSubjectId] === 'number' ? b.scores[selectedSubjectId] as number : parseFloat(b.scores[selectedSubjectId] as string);
+                            return (valB || 0) - (valA || 0);
+                          })
+                          .slice(0, 2)
+                          .map((student, idx) => (
+                            <div key={student.id} className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                              <div className="flex items-center gap-3">
+                                <span className="w-6 h-6 rounded-full bg-emerald-200 text-emerald-800 flex items-center justify-center text-xs font-bold">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-medium text-gray-900">{student.name}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-gray-900">{student.scores[selectedSubjectId]}</span>
+                                <span className="text-xs font-bold px-2 py-1 bg-emerald-200 text-emerald-800 rounded">
+                                  {resolveGrade(student.scores[selectedSubjectId], gradeScales)?.grade || '-'}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-gray-900">{student.scores[selectedSubjectId]}</span>
-                              <span className="text-xs font-bold px-2 py-1 bg-rose-200 text-rose-800 rounded">
-                                {resolveGrade(student.scores[selectedSubjectId], gradeScales)?.grade || '-'}
-                              </span>
+                          ))}
+                        {students.filter(s => s.scores[selectedSubjectId] !== undefined && s.scores[selectedSubjectId] !== '').length === 0 && (
+                          <p className="text-gray-500 text-sm text-center">No scores recorded.</p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-md font-medium text-gray-700 mb-4 text-center">Bottom 2 Performers</h4>
+                      <div className="space-y-3">
+                        {students
+                          .filter(s => s.scores[selectedSubjectId] !== undefined && s.scores[selectedSubjectId] !== '')
+                          .sort((a, b) => {
+                            const valA = typeof a.scores[selectedSubjectId] === 'number' ? a.scores[selectedSubjectId] as number : parseFloat(a.scores[selectedSubjectId] as string);
+                            const valB = typeof b.scores[selectedSubjectId] === 'number' ? b.scores[selectedSubjectId] as number : parseFloat(b.scores[selectedSubjectId] as string);
+                            return (valA || 0) - (valB || 0);
+                          })
+                          .slice(0, 2)
+                          .map((student, idx) => (
+                            <div key={student.id} className="flex items-center justify-between p-3 bg-rose-50 rounded-lg border border-rose-100">
+                              <div className="flex items-center gap-3">
+                                <span className="w-6 h-6 rounded-full bg-rose-200 text-rose-800 flex items-center justify-center text-xs font-bold">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-medium text-gray-900">{student.name}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-gray-900">{student.scores[selectedSubjectId]}</span>
+                                <span className="text-xs font-bold px-2 py-1 bg-rose-200 text-rose-800 rounded">
+                                  {resolveGrade(student.scores[selectedSubjectId], gradeScales)?.grade || '-'}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      {students.filter(s => s.scores[selectedSubjectId] !== undefined && s.scores[selectedSubjectId] !== '').length === 0 && (
-                        <p className="text-gray-500 text-sm text-center">No scores recorded.</p>
-                      )}
+                          ))}
+                        {students.filter(s => s.scores[selectedSubjectId] !== undefined && s.scores[selectedSubjectId] !== '').length === 0 && (
+                          <p className="text-gray-500 text-sm text-center">No scores recorded.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
