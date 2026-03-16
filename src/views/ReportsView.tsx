@@ -156,6 +156,14 @@ export default function ReportsView({
         row.eachCell((cell, colNumber) => {
           cell.alignment = { vertical: 'middle', horizontal: colNumber > 2 ? 'center' : 'left' };
           cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+          
+          // Color coding important columns
+          if (colNumber === 5) { // Aggregate Points
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } };
+            cell.font = { bold: true };
+          } else if (colNumber === 3 || colNumber === 4) { // Total and Average Scores
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+          }
         });
       });
     }
@@ -214,9 +222,21 @@ export default function ReportsView({
           ...subjRanges.flatMap(r => [row.ranges[r.id].M, row.ranges[r.id].F])
         ];
         const excelRow = ws.addRow(rowData);
-        excelRow.eachCell(cell => {
+        excelRow.eachCell((cell, colNumber) => {
           cell.alignment = { vertical: 'middle', horizontal: 'center' };
           cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+          // Color coding important columns
+          const totalStartCol = 1 + (gradeScales.length * 2) + 1;
+          const rangeStartCol = totalStartCol + 2;
+
+          if (colNumber >= totalStartCol && colNumber < rangeStartCol) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+            cell.font = { bold: true };
+          } else if (colNumber >= rangeStartCol) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+            cell.font = { bold: true };
+          }
         });
       });
 
@@ -254,9 +274,14 @@ export default function ReportsView({
 
       Object.entries(distribution).filter(([_, count]) => count > 0).forEach(([grade, count]) => {
         const row = ws.addRow({ grade, count });
-        row.eachCell(cell => {
+        row.eachCell((cell, colNumber) => {
           cell.alignment = { vertical: 'middle', horizontal: 'center' };
           cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+          
+          if (colNumber === 2) { // Count column
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+            cell.font = { bold: true };
+          }
         });
       });
     }

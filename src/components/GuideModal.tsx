@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Download, CheckCircle2, Upload, FileSpreadsheet, ArrowRight } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Download, CheckCircle2, Upload, FileSpreadsheet, ArrowRight, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface GuideModalProps {
   isOpen: boolean;
@@ -9,12 +9,55 @@ interface GuideModalProps {
 }
 
 export default function GuideModal({ isOpen, onClose, onDownloadTemplate, onImportExcel }: GuideModalProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showUpArrow, setShowUpArrow] = useState(false);
+  const [showDownArrow, setShowDownArrow] = useState(false);
+
+  const checkScroll = () => {
+    if (scrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      setShowUpArrow(scrollTop > 20);
+      setShowDownArrow(scrollTop + clientHeight < scrollHeight - 20);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      // Small delay to ensure content is rendered and dimensions are correct
+      const timer = setTimeout(checkScroll, 100);
+      window.addEventListener('resize', checkScroll);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('resize', checkScroll);
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl md:rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-300">
-        <div className="relative p-6 md:p-12">
+      <div className="bg-white rounded-3xl md:rounded-[2.5rem] shadow-2xl w-full max-w-4xl relative overflow-hidden animate-in fade-in zoom-in duration-300">
+        {/* Scroll Indicators (Mobile Only) */}
+        <div className="md:hidden pointer-events-none">
+          {showUpArrow && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 text-indigo-500 animate-bounce bg-white/80 rounded-full p-1 shadow-sm">
+              <ChevronUp className="w-5 h-5" />
+            </div>
+          )}
+          {showDownArrow && (
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 text-indigo-500 animate-bounce bg-white/80 rounded-full p-1 shadow-sm">
+              <ChevronDown className="w-5 h-5" />
+            </div>
+          )}
+        </div>
+
+        <div 
+          ref={scrollRef}
+          onScroll={checkScroll}
+          className="max-h-[85vh] md:max-h-[90vh] overflow-y-auto scroll-smooth"
+        >
+          <div className="relative p-6 md:p-12">
           <button 
             onClick={onClose}
             className="absolute top-4 right-4 md:top-6 md:right-6 p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 z-10"
@@ -96,5 +139,6 @@ export default function GuideModal({ isOpen, onClose, onDownloadTemplate, onImpo
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }
