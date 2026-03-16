@@ -1,33 +1,75 @@
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Subject, Student } from './types';
 
-export const downloadTemplate = (subjects: Subject[]) => {
-  const templateData = [
-    {
-      'Name': 'John Doe',
-      'Sex': 'M',
-      ...subjects.reduce((acc, sub) => ({ ...acc, [sub.name]: 75 }), {})
-    },
-    {
-      'Name': 'Jane Smith',
-      'Sex': 'F',
-      ...subjects.reduce((acc, sub) => ({ ...acc, [sub.name]: 82 }), {})
-    }
+export const downloadTemplate = async (subjects: Subject[]) => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Template');
+
+  // Define columns
+  const columns = [
+    { header: 'Name', key: 'name', width: 30 },
+    { header: 'Sex', key: 'sex', width: 10 },
+    ...subjects.map(sub => ({ header: sub.name, key: sub.id, width: 15 }))
   ];
 
-  const ws = XLSX.utils.json_to_sheet(templateData);
-  
-  // Set column widths
-  const wscols = [
-    { wch: 25 }, // Name
-    { wch: 10 }, // Sex
-    ...subjects.map(() => ({ wch: 15 })) // Subjects
-  ];
-  ws['!cols'] = wscols;
+  worksheet.columns = columns;
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Template");
-  XLSX.writeFile(wb, "student_scores_template.xlsx");
+  // Style Header Row
+  const headerRow = worksheet.getRow(1);
+  headerRow.height = 30;
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4F46E5' }, // Indigo-600
+    };
+    cell.font = {
+      color: { argb: 'FFFFFFFF' },
+      bold: true,
+      size: 11
+    };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true
+    };
+    cell.border = {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'thin' },
+      right: { style: 'thin' }
+    };
+  });
+
+  // Add sample data
+  const sampleData = [
+    { name: 'John Doe', sex: 'M', ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: 75 }), {}) },
+    { name: 'Jane Smith', sex: 'F', ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: 82 }), {}) }
+  ];
+
+  sampleData.forEach(data => {
+    const row = worksheet.addRow(data);
+    row.eachCell((cell, colNumber) => {
+      cell.alignment = { vertical: 'middle', horizontal: colNumber > 2 ? 'center' : 'left' };
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+  });
+
+  // Generate and download file
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'student_scores_template.xlsx';
+  anchor.click();
+  window.URL.revokeObjectURL(url);
 };
 
 export const processExcelFile = (

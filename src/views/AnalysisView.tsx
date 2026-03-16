@@ -128,24 +128,24 @@ export default function AnalysisView({
         <p className="text-gray-500 mt-1">Deep dive into student and subject metrics.</p>
       </div>
 
-      <div className="flex gap-2 bg-gray-100 p-1 rounded-xl w-fit">
+      <div className="flex flex-wrap gap-2 bg-gray-100 p-1 rounded-xl w-fit">
         <button 
           onClick={() => setAnalysisType('aggregate')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === 'aggregate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${analysisType === 'aggregate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
         >
-          Aggregate Analysis
+          Aggregate
         </button>
         <button 
           onClick={() => setAnalysisType('subject')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === 'subject' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${analysisType === 'subject' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
         >
-          Subject Analysis
+          Subject
         </button>
         <button 
           onClick={() => setAnalysisType('class')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === 'class' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${analysisType === 'class' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
         >
-          Class Overview
+          Class
         </button>
       </div>
 
@@ -172,8 +172,8 @@ export default function AnalysisView({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse whitespace-nowrap">
+            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+              <table className="w-full text-left border-collapse whitespace-nowrap min-w-[600px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
                     <th className="p-4 font-medium border-r border-gray-200">Sex</th>
@@ -247,8 +247,8 @@ export default function AnalysisView({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse whitespace-nowrap">
+            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+              <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
                     <th rowSpan={2} className="p-4 font-medium border-r border-gray-200 sticky left-0 bg-gray-50 z-10 align-bottom">Subject</th>
@@ -426,7 +426,7 @@ export default function AnalysisView({
                 </button>
               </div>
             </div>
-            <div className="h-96 w-full">
+            <div className="h-64 md:h-96 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={classAnalysisData} margin={{ top: 20, right: 30, left: 0, bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />

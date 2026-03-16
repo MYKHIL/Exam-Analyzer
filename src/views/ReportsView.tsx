@@ -4,7 +4,7 @@ import { calculateStudentAggregate, resolveGrade, getSubjectSummaryData } from '
 import { FileText, Download, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 export default function ReportsView({ 
   students, subjects, gradeScales, subjRanges
@@ -116,40 +116,159 @@ export default function ReportsView({
     doc.save("exam_report.pdf");
   };
 
-  const handleExportExcel = () => {
-    // Generate a comprehensive Excel of student aggregates
-    const data = students.map(s => {
-      const agg = calculateStudentAggregate(s, subjects, gradeScales);
-      const row: any = {
-        'Student Name': s.name,
-        'Sex': s.sex,
-        'Total Score': agg.totalScore,
-        'Average Score': agg.averageScore.toFixed(1),
-        'Aggregate Points': agg.aggregatePoints,
-      };
-      // Add individual subject scores
-      subjects.forEach(sub => {
-        row[sub.name] = s.scores[sub.id] !== undefined ? s.scores[sub.id] : '';
+  const handleExportExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    
+    if (includeAggregates) {
+      const ws = workbook.addWorksheet('Student Aggregates');
+      const columns = [
+        { header: 'Student Name', key: 'name', width: 30 },
+        { header: 'Sex', key: 'sex', width: 10 },
+        { header: 'Total Score', key: 'totalScore', width: 15 },
+        { header: 'Average Score', key: 'averageScore', width: 15 },
+        { header: 'Aggregate Points', key: 'aggregatePoints', width: 15 },
+        ...subjects.map(sub => ({ header: sub.name, key: sub.id, width: 15 }))
+      ];
+      ws.columns = columns;
+
+      // Style Header
+      const headerRow = ws.getRow(1);
+      headerRow.height = 30;
+      headerRow.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
       });
-      return row;
-    });
 
-    const ws = XLSX.utils.json_to_sheet(data);
+      // Add Data
+      students.forEach(s => {
+        const agg = calculateStudentAggregate(s, subjects, gradeScales);
+        const rowData = {
+          name: s.name,
+          sex: s.sex,
+          totalScore: agg.totalScore,
+          averageScore: agg.averageScore.toFixed(1),
+          aggregatePoints: agg.aggregatePoints,
+          ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: s.scores[sub.id] || '' }), {})
+        };
+        const row = ws.addRow(rowData);
+        row.eachCell((cell, colNumber) => {
+          cell.alignment = { vertical: 'middle', horizontal: colNumber > 2 ? 'center' : 'left' };
+          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+      });
+    }
 
-    // Set column widths
-    const wscols = [
-      { wch: 25 }, // Student Name
-      { wch: 10 }, // Sex
-      { wch: 15 }, // Total Score
-      { wch: 15 }, // Average Score
-      { wch: 15 }, // Aggregate Points
-      ...subjects.map(() => ({ wch: 15 })) // Subjects
-    ];
-    ws['!cols'] = wscols;
+    if (includeSubjectPerf) {
+      const ws = workbook.addWorksheet('Subject Performance');
+      const summaryData = getSubjectSummaryData(students, subjects, gradeScales, subjRanges);
+      
+      const header1 = ['Subject'];
+      const header2 = [''];
+      
+      gradeScales.forEach(g => {
+        header1.push(`Grade ${g.grade}`, '');
+        header2.push('M', 'F');
+      });
+      header1.push('Total', '');
+      header2.push('M', 'F');
+      subjRanges.forEach(r => {
+        header1.push(`Range ${r.min}-${r.max}`, '');
+        header2.push('M', 'F');
+      });
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Exam Report");
-    XLSX.writeFile(wb, "exam_report.xlsx");
+      ws.addRow(header1);
+      ws.addRow(header2);
+
+      // Merge cells for header1
+      let colIdx = 2;
+      gradeScales.forEach(() => {
+        ws.mergeCells(1, colIdx, 1, colIdx + 1);
+        colIdx += 2;
+      });
+      ws.mergeCells(1, colIdx, 1, colIdx + 1); // Total
+      colIdx += 2;
+      subjRanges.forEach(() => {
+        ws.mergeCells(1, colIdx, 1, colIdx + 1);
+        colIdx += 2;
+      });
+      ws.mergeCells(1, 1, 2, 1); // Subject
+
+      // Style Headers
+      [ws.getRow(1), ws.getRow(2)].forEach(row => {
+        row.eachCell(cell => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
+          cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+      });
+
+      // Add Data
+      summaryData.forEach(row => {
+        const rowData = [
+          row.subject,
+          ...gradeScales.flatMap(g => [row.grades[g.grade].M, row.grades[g.grade].F]),
+          row.total.M, row.total.F,
+          ...subjRanges.flatMap(r => [row.ranges[r.id].M, row.ranges[r.id].F])
+        ];
+        const excelRow = ws.addRow(rowData);
+        excelRow.eachCell(cell => {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+      });
+
+      ws.getColumn(1).width = 25;
+      for (let i = 2; i <= header1.length; i++) ws.getColumn(i).width = 8;
+    }
+
+    if (includeGradeDist) {
+      const ws = workbook.addWorksheet('Grade Distribution');
+      const distribution: Record<string, number> = {};
+      gradeScales.forEach(g => distribution[g.grade] = 0);
+      
+      students.forEach(student => {
+        subjects.forEach(subject => {
+          const score = student.scores[subject.id];
+          if (score !== undefined && score !== '') {
+            const grade = resolveGrade(score, gradeScales);
+            if (grade) distribution[grade.grade]++;
+          }
+        });
+      });
+
+      ws.columns = [
+        { header: 'Grade', key: 'grade', width: 15 },
+        { header: 'Count', key: 'count', width: 15 }
+      ];
+
+      const headerRow = ws.getRow(1);
+      headerRow.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF59E0B' } };
+        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+
+      Object.entries(distribution).filter(([_, count]) => count > 0).forEach(([grade, count]) => {
+        const row = ws.addRow({ grade, count });
+        row.eachCell(cell => {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'exam_report.xlsx';
+    anchor.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -159,7 +278,7 @@ export default function ReportsView({
         <p className="text-gray-500 mt-1">Generate customizable reports and export data.</p>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+      <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Report Content</h3>
         
         <div className="space-y-4 mb-8">
@@ -192,18 +311,18 @@ export default function ReportsView({
           </label>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col md:flex-row gap-4">
           <button 
             onClick={handleExportPDF}
             className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors"
           >
-            <FileText className="w-5 h-5" /> Export as PDF
+            <FileText className="w-5 h-5" /> PDF
           </button>
           <button 
             onClick={handleExportExcel}
             className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors"
           >
-            <FileSpreadsheet className="w-5 h-5" /> Export as Excel
+            <FileSpreadsheet className="w-5 h-5" /> Excel
           </button>
         </div>
       </div>

@@ -117,7 +117,8 @@ export default function StudentsView({
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse whitespace-nowrap">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
@@ -209,6 +210,79 @@ export default function StudentsView({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {filteredStudents.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">No students found.</div>
+          ) : (
+            filteredStudents.map((student) => {
+              const aggregate = calculateStudentAggregate(student, subjects, gradeScales);
+              return (
+                <div key={student.id} className="p-4 space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 space-y-2">
+                      <input 
+                        type="text"
+                        value={student.name}
+                        onChange={(e) => handleUpdateStudentName(student.id, e.target.value)}
+                        className="w-full text-lg font-bold text-gray-900 bg-transparent border-b border-transparent focus:border-indigo-500 outline-none"
+                      />
+                      <div className="flex items-center gap-3">
+                        <select
+                          value={student.sex}
+                          onChange={(e) => handleUpdateStudentSex(student.id, e.target.value as 'M' | 'F')}
+                          className="text-sm text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-200"
+                        >
+                          <option value="M">Male</option>
+                          <option value="F">Female</option>
+                        </select>
+                        <span className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
+                          Agg: {aggregate.aggregatePoints}
+                        </span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleRemoveStudent(student.id)}
+                      className="text-gray-400 hover:text-red-500 p-2"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {subjects.map(subject => {
+                      const score = student.scores[subject.id];
+                      const grade = resolveGrade(score, gradeScales);
+                      return (
+                        <div key={subject.id} className="bg-gray-50 p-2 rounded-lg border border-gray-100">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-[10px] font-medium text-gray-500 uppercase truncate pr-1">
+                              {subject.name}
+                            </span>
+                            {grade && (
+                              <span className="text-[10px] font-bold text-indigo-600">
+                                {grade.grade}
+                              </span>
+                            )}
+                          </div>
+                          <input 
+                            type="text"
+                            inputMode="numeric"
+                            value={score !== undefined ? score : ''}
+                            onChange={(e) => handleUpdateScore(student.id, subject.id, e.target.value)}
+                            className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            placeholder="Score"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>

@@ -42,10 +42,10 @@ export default function ConfigurationView({
       </div>
 
       {/* Subjects Configuration */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Subjects</h3>
         
-        <div className="flex gap-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
           <input 
             type="text" 
             placeholder="Subject Name" 
@@ -54,20 +54,22 @@ export default function ConfigurationView({
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
             onKeyDown={e => e.key === 'Enter' && handleAddSubject()}
           />
-          <select 
-            value={newSubjectType}
-            onChange={e => setNewSubjectType(e.target.value as 'core' | 'elective')}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white"
-          >
-            <option value="core">Core</option>
-            <option value="elective">Elective</option>
-          </select>
-          <button 
-            onClick={handleAddSubject}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shrink-0"
-          >
-            <Plus className="w-4 h-4" /> Add Subject
-          </button>
+          <div className="flex gap-2">
+            <select 
+              value={newSubjectType}
+              onChange={e => setNewSubjectType(e.target.value as 'core' | 'elective')}
+              className="flex-1 md:flex-none px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white"
+            >
+              <option value="core">Core</option>
+              <option value="elective">Elective</option>
+            </select>
+            <button 
+              onClick={handleAddSubject}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shrink-0"
+            >
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -89,7 +91,7 @@ export default function ConfigurationView({
       </div>
 
       {/* Grade Scales Configuration */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900">Grade Scales</h3>
           <button 
@@ -100,8 +102,8 @@ export default function ConfigurationView({
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <table className="w-full text-left border-collapse min-w-[500px]">
             <thead>
               <tr className="border-b border-gray-200 text-sm text-gray-500">
                 <th className="pb-3 font-medium">Grade</th>
