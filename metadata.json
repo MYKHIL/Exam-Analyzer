@@ -1,0 +1,5 @@
+{
+  "name": "Exam Analyzer",
+  "description": "An application to analyze exam scores, configure grade scales, and view per-student and per-subject performance.",
+  "requestFramePermissions": []
+}
