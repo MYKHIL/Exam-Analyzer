@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { GradeScale, Subject, School } from '../types';
-import { Plus, Trash2, Users, UserPlus, ShieldCheck, Mail, Key, Copy, Check, BookOpen } from 'lucide-react';
+import { Plus, Trash2, Users, UserPlus, ShieldCheck, Mail, Key, Copy, Check, BookOpen, AlertTriangle } from 'lucide-react';
 import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove, addDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -103,43 +103,37 @@ export default function ConfigurationView({
     if (!codeToRevoke) return;
 
     const message = codeToRevoke.isUsed 
-      ? 'This code has been used. Deleting it will also REVOKE access for the user who used it. Continue?'
+      ? 'This code has been used. Deleting it will also PERMANENTLY DELETE the user account and all their access. Continue?'
       : 'Are you sure you want to revoke this access code?';
 
     if (!confirm(message)) return;
 
     try {
-      // 1. If used, revoke access for that user
-      if (codeToRevoke.isUsed && codeToRevoke.usedBy && school) {
-        // Remove from school authorized list
-        const schoolRef = doc(db, 'schools', school.id);
-        await updateDoc(schoolRef, {
-          authorizedUids: arrayRemove(codeToRevoke.usedBy)
+      // 1. If used, revoke access via backend API
+      if (codeToRevoke.isUsed && codeToRevoke.usedBy && school && user) {
+        const response = await fetch('/api/admin/revoke-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetUid: codeToRevoke.usedBy,
+            schoolId: school.id,
+            requesterUid: user.uid
+          })
         });
 
-        // Clear user document fields
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('uid', '==', codeToRevoke.usedBy));
-        const snapshot = await getDocs(q);
-        
-        if (!snapshot.empty) {
-          const userDoc = snapshot.docs[0];
-          await updateDoc(doc(db, 'users', userDoc.id), {
-            schoolId: null,
-            role: 'staff',
-            assignedSubjects: [],
-            joinedWithCode: null
-          });
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || 'Failed to revoke user');
         }
       }
 
-      // 2. Delete the code document
+      // 2. Delete the code document (if not already handled by backend or if unused)
       await deleteDoc(doc(db, 'teacherCodes', id));
       
-      alert(codeToRevoke.isUsed ? 'Code deleted and user access revoked.' : 'Access code revoked.');
-    } catch (error) {
+      alert(codeToRevoke.isUsed ? 'User account deleted and access revoked.' : 'Access code revoked.');
+    } catch (error: any) {
       console.error('Error deleting code:', error);
-      alert('Failed to delete code.');
+      alert(`Failed to delete code: ${error.message}`);
     }
   };
 
@@ -190,36 +184,31 @@ export default function ConfigurationView({
   };
 
   const handleRemoveMember = async (uid: string) => {
-    if (!school) return;
-    if (!confirm('Are you sure you want to revoke access for this member?')) return;
+    if (!school || !user) return;
+    if (!confirm('Are you sure you want to PERMANENTLY DELETE this user account and revoke all access?')) return;
 
     try {
-      // 1. Remove from school authorized list
-      const schoolRef = doc(db, 'schools', school.id);
-      await updateDoc(schoolRef, {
-        authorizedUids: arrayRemove(uid)
+      const response = await fetch('/api/admin/revoke-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUid: uid,
+          schoolId: school.id,
+          requesterUid: user.uid
+        })
       });
 
-      // 2. Clear user document fields
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('uid', '==', uid));
-      const snapshot = await getDocs(q);
-      
-      if (!snapshot.empty) {
-        const userDoc = snapshot.docs[0];
-        await updateDoc(doc(db, 'users', userDoc.id), {
-          schoolId: null,
-          role: 'staff',
-          assignedSubjects: []
-        });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to revoke user');
       }
 
-      // 3. Update local state
+      // Update local state
       setAuthorizedUsers(prev => prev.filter(u => u.uid !== uid));
-      alert('Access revoked successfully!');
-    } catch (error) {
+      alert('User account deleted and access revoked successfully!');
+    } catch (error: any) {
       console.error('Error revoking access:', error);
-      alert('Failed to revoke access.');
+      alert(`Failed to revoke access: ${error.message}`);
     }
   };
 
@@ -247,6 +236,42 @@ export default function ConfigurationView({
     } catch (error) {
       console.error('Error updating role:', error);
       alert('Failed to update role.');
+    }
+  };
+
+  const handleDeleteSchool = async () => {
+    if (!school || !user) return;
+    if (school.adminUid !== user.uid) {
+      alert('Only the school creator can delete the school.');
+      return;
+    }
+
+    const confirm1 = confirm('CRITICAL WARNING: This will PERMANENTLY DELETE the school, all exams, all subjects, and ALL user accounts associated with this school (including yours). This cannot be undone. Are you absolutely sure?');
+    if (!confirm1) return;
+
+    const confirm2 = confirm('FINAL CONFIRMATION: You will be logged out and your account will be deleted. Continue?');
+    if (!confirm2) return;
+
+    try {
+      const response = await fetch('/api/admin/delete-school', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolId: school.id,
+          requesterUid: user.uid
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to delete school');
+      }
+
+      alert('School and all accounts deleted successfully. You will now be logged out.');
+      window.location.reload(); // Force reload to clear state and show login
+    } catch (error: any) {
+      console.error('Error deleting school:', error);
+      alert(`Failed to delete school: ${error.message}`);
     }
   };
 
@@ -671,6 +696,38 @@ export default function ConfigurationView({
                   <p className="text-sm text-gray-500 italic py-2">No additional members added yet.</p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Danger Zone - Only for Primary Admin */}
+      {school?.adminUid === user?.uid && (
+        <div className="bg-red-50 rounded-2xl p-4 md:p-6 shadow-sm border border-red-100 mt-12">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-red-100 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-red-900">Danger Zone</h3>
+              <p className="text-sm text-red-600">Irreversible actions for school management.</p>
+            </div>
+          </div>
+
+          <div className="p-4 bg-white rounded-xl border border-red-200">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-gray-900">Delete School & All Data</h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  This will permanently delete the school, all exams, and all associated user accounts from the database and authentication.
+                </p>
+              </div>
+              <button 
+                onClick={handleDeleteSchool}
+                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold text-sm transition-colors shrink-0"
+              >
+                Delete School Permanently
+              </button>
             </div>
           </div>
         </div>
