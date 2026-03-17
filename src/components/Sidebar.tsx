@@ -1,14 +1,19 @@
-import { LayoutDashboard, Settings, Users, BarChart3, FileText, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, Settings, Users, BarChart3, FileText, HelpCircle, BookOpen, LogOut } from 'lucide-react';
+import { logOut } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar({ 
   activeTab, 
   setActiveTab,
-  onShowGuide
+  onShowGuide,
+  onSwitchExam
 }: { 
   activeTab: string, 
   setActiveTab: (t: string) => void,
-  onShowGuide: () => void
+  onShowGuide: () => void,
+  onSwitchExam: () => void
 }) {
+  const { school, currentExam } = useAuth();
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'students', label: 'Students & Scores', icon: Users },
@@ -26,6 +31,10 @@ export default function Sidebar({
             <BarChart3 className="w-6 h-6" />
             Exam Analyzer
           </h1>
+          <div className="mt-2">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{school?.name}</p>
+            <p className="text-sm font-medium text-gray-600 truncate">{currentExam?.name}</p>
+          </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
           {navItems.map(item => (
@@ -43,13 +52,27 @@ export default function Sidebar({
             </button>
           ))}
         </nav>
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200 space-y-1">
+          <button
+            onClick={onSwitchExam}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+          >
+            <BookOpen className="w-5 h-5 text-gray-400" />
+            Switch Exam
+          </button>
           <button
             onClick={onShowGuide}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
           >
             <HelpCircle className="w-5 h-5 text-gray-400" />
             How to use
+          </button>
+          <button
+            onClick={() => logOut()}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <LogOut className="w-5 h-5 text-red-400" />
+            Logout
           </button>
         </div>
       </div>
@@ -72,11 +95,11 @@ export default function Sidebar({
             </button>
           ))}
           <button
-            onClick={onShowGuide}
+            onClick={onSwitchExam}
             className="flex flex-col items-center gap-1 p-2 rounded-lg text-gray-500"
           >
-            <HelpCircle className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Help</span>
+            <BookOpen className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Exams</span>
           </button>
         </div>
       </div>

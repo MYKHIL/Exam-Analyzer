@@ -3,6 +3,7 @@ import { Student, Subject, GradeScale } from '../types';
 import { resolveGrade, calculateStudentAggregate } from '../utils';
 import { Plus, Trash2, Search, Download, FileSpreadsheet } from 'lucide-react';
 import { downloadTemplate, processExcelFile } from '../excelUtils';
+import { useAuth } from '../context/AuthContext';
 
 export default function StudentsView({ 
   students, setStudents, subjects, gradeScales 
@@ -10,16 +11,25 @@ export default function StudentsView({
   students: Student[], setStudents: (s: Student[]) => void,
   subjects: Subject[], gradeScales: GradeScale[]
 }) {
+  const { school, currentExam } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddStudent = () => {
+    if (!school || !currentExam) return;
     const hasEmptyName = students.some(s => !s.name.trim());
     if (hasEmptyName) {
       alert('Please enter a name for all existing students before adding a new one.');
       return;
     }
-    setStudents([...students, { id: crypto.randomUUID(), name: '', sex: 'M', scores: {} }]);
+    setStudents([...students, { 
+      id: crypto.randomUUID(), 
+      name: '', 
+      sex: 'M', 
+      scores: {},
+      schoolId: school.id,
+      examId: currentExam.id
+    }]);
   };
 
   const handleRemoveStudent = (id: string) => {
@@ -64,9 +74,10 @@ export default function StudentsView({
   };
 
   const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!school || !currentExam) return;
     const file = e.target.files?.[0];
     if (!file) return;
-    processExcelFile(file, subjects, students, setStudents);
+    processExcelFile(file, subjects, students, school.id, currentExam.id, setStudents);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 

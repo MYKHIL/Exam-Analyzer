@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "School": {
+      "title": "School",
+      "description": "Represents a school entity.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the school." },
+        "adminUid": { "type": "string", "description": "The UID of the school administrator." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "adminUid"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Represents an exam session (e.g., Term 1 2024).",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the exam." },
+        "schoolId": { "type": "string", "description": "The ID of the school this exam belongs to." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "subjects": { "type": "array", "items": { "type": "object" } },
+        "gradeScales": { "type": "array", "items": { "type": "object" } },
+        "subjRanges": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["name", "schoolId"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Represents a student and their scores for a specific exam.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "sex": { "type": "string", "enum": ["M", "F"] },
+        "scores": { "type": "object" },
+        "examId": { "type": "string" },
+        "schoolId": { "type": "string" }
+      },
+      "required": ["name", "sex", "examId", "schoolId"]
+    }
+  },
+  "firestore": {
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Collection of schools."
+    },
+    "/exams/{examId}": {
+      "schema": "Exam",
+      "description": "Collection of exams."
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of students."
+    }
+  }
+}

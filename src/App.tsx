@@ -4,8 +4,7 @@
  */
 
 import { useState, useRef, useEffect, ChangeEvent } from 'react';
-import { GradeScale, Subject, Student } from './types';
-import { DEFAULT_GRADE_SCALES, DEFAULT_SUBJECTS, DEFAULT_STUDENTS } from './constants';
+import { GradeScale, Subject, Student, Exam } from './types';
 import Sidebar from './components/Sidebar';
 import ConfigurationView from './views/ConfigurationView';
 import StudentsView from './views/StudentsView';
@@ -13,13 +12,20 @@ import AnalysisView from './views/AnalysisView';
 import DashboardView from './views/DashboardView';
 import ReportsView from './views/ReportsView';
 import GuideModal from './components/GuideModal';
+import AuthView from './views/AuthView';
+import SchoolSetupView from './views/SchoolSetupView';
+import ExamSelectorView from './views/ExamSelectorView';
 import { downloadTemplate, processExcelFile } from './excelUtils';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { db } from './firebase';
 
-export default function App() {
+function AppContent() {
+  const { user, loading, school, currentExam, setCurrentExam } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [gradeScales, setGradeScales] = useState<GradeScale[]>(DEFAULT_GRADE_SCALES);
-  const [subjects, setSubjects] = useState<Subject[]>(DEFAULT_SUBJECTS);
-  const [students, setStudents] = useState<Student[]>(DEFAULT_STUDENTS);
+  const [gradeScales, setGradeScales] = useState<GradeScale[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -27,18 +33,87 @@ export default function App() {
   const [aggRangeMax, setAggRangeMax] = useState<number>(36);
   const [subjRanges, setSubjRanges] = useState<{id: string, min: number, max: number}[]>([{id: '1', min: 1, max: 6}]);
 
+  // Sync Exam Config
   useEffect(() => {
-    // Show guide on first open if no students
-    if (students.length === 0) {
-      setIsGuideOpen(true);
+    if (!currentExam) return;
+    setGradeScales(currentExam.gradeScales);
+    setSubjects(currentExam.subjects);
+    setSubjRanges(currentExam.subjRanges);
+  }, [currentExam]);
+
+  // Sync Students from Firestore
+  useEffect(() => {
+    if (!currentExam) return;
+
+    const q = query(collection(db, 'students'), where('examId', '==', currentExam.id));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const studentData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+      setStudents(studentData);
+    });
+
+    return () => unsubscribe();
+  }, [currentExam]);
+
+  // Update Exam Config in Firestore
+  const updateExamConfig = async (newSubjects: Subject[], newGradeScales: GradeScale[]) => {
+    if (!currentExam) return;
+    try {
+      await updateDoc(doc(db, 'exams', currentExam.id), {
+        subjects: newSubjects,
+        gradeScales: newGradeScales
+      });
+    } catch (error) {
+      console.error('Error updating exam config:', error);
     }
-  }, []);
+  };
+
+  // Update Students in Firestore
+  const handleSetStudents = async (newStudents: Student[]) => {
+    if (!currentExam || !school) return;
+
+    const batch = writeBatch(db);
+    
+    // This is a simplified sync. In a real app, you'd track changes.
+    // For now, we'll handle additions and updates.
+    newStudents.forEach(s => {
+      const studentRef = doc(collection(db, 'students'), s.id);
+      batch.set(studentRef, {
+        ...s,
+        examId: currentExam.id,
+        schoolId: school.id
+      });
+    });
+
+    // Handle deletions
+    const deletedIds = students.filter(s => !newStudents.find(ns => ns.id === s.id)).map(s => s.id);
+    deletedIds.forEach(id => {
+      batch.delete(doc(db, 'students', id));
+    });
+
+    try {
+      await batch.commit();
+    } catch (error) {
+      console.error('Error syncing students:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-indigo-600">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+      </div>
+    );
+  }
+
+  if (!user) return <AuthView />;
+  if (!school) return <SchoolSetupView />;
+  if (!currentExam) return <ExamSelectorView />;
 
   const handleImportExcel = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    processExcelFile(file, subjects, students, (updatedStudents) => {
-      setStudents(updatedStudents);
+    processExcelFile(file, subjects, students, school.id, currentExam.id, (updatedStudents) => {
+      handleSetStudents(updatedStudents);
       setIsGuideOpen(false);
       setActiveTab('students');
     });
@@ -47,20 +122,27 @@ export default function App() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-gray-50 font-sans text-gray-900 overflow-hidden">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onShowGuide={() => setIsGuideOpen(true)} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onShowGuide={() => setIsGuideOpen(true)}
+        onSwitchExam={() => setCurrentExam(null)}
+      />
       <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
         {activeTab === 'dashboard' && (
           <DashboardView students={students} subjects={subjects} gradeScales={gradeScales} />
         )}
         {activeTab === 'config' && (
           <ConfigurationView 
-            gradeScales={gradeScales} setGradeScales={setGradeScales}
-            subjects={subjects} setSubjects={setSubjects}
+            gradeScales={gradeScales} 
+            setGradeScales={(gs) => { setGradeScales(gs); updateExamConfig(subjects, gs); }}
+            subjects={subjects} 
+            setSubjects={(subjs) => { setSubjects(subjs); updateExamConfig(subjs, gradeScales); }}
           />
         )}
         {activeTab === 'students' && (
           <StudentsView 
-            students={students} setStudents={setStudents}
+            students={students} setStudents={handleSetStudents}
             subjects={subjects} gradeScales={gradeScales}
           />
         )}
@@ -95,5 +177,13 @@ export default function App() {
         onImportExcel={() => fileInputRef.current?.click()}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

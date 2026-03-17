@@ -1,5 +1,5 @@
 {
-  "name": "Exam Analyzer",
-  "description": "An application to analyze exam scores, configure grade scales, and view per-student and per-subject performance.",
+  "name": "Exam Analyzer Pro",
+  "description": "Multi-school examination management and analysis system with permanent Firebase storage, custom grade scales, and detailed performance reporting.",
   "requestFramePermissions": []
 }

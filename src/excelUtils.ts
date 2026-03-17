@@ -76,6 +76,8 @@ export const processExcelFile = (
   file: File, 
   subjects: Subject[], 
   existingStudents: Student[], 
+  schoolId: string,
+  examId: string,
   onComplete: (students: Student[]) => void
 ) => {
   const reader = new FileReader();
@@ -98,7 +100,14 @@ export const processExcelFile = (
       // Find or create student
       let student = newStudents.find(s => s.name.toLowerCase() === name.toLowerCase());
       if (!student) {
-        student = { id: crypto.randomUUID(), name: name, sex: sex, scores: {} };
+        student = { 
+          id: crypto.randomUUID(), 
+          name: name, 
+          sex: sex, 
+          scores: {},
+          schoolId,
+          examId
+        };
         newStudents.push(student);
       }
 
