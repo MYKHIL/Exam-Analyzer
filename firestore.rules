@@ -2,20 +2,70 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId} (Firebase Auth UID)
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - displayName: string (optional)
+    //   - schoolId: string (optional)
+    //   - lastLogin: string (optional, ISO 8601)
+    //
+    // Collection: schools
+    // Document ID: {schoolId} (Auto-generated)
+    // Fields:
+    //   - name: string (required)
+    //   - adminUid: string (required)
+    //   - authorizedUids: list of strings (optional)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // Collection: exams
+    // Document ID: {examId} (Auto-generated)
+    // Fields:
+    //   - name: string (required)
+    //   - schoolId: string (required)
+    //   - date: string (required, ISO 8601)
+    //
+    // Collection: studentBuckets
+    // Document ID: {bucketId} (Auto-generated)
+    // Fields:
+    //   - examId: string (required)
+    //   - schoolId: string (required)
+    //   - students: list of objects (required)
+    //
+    // ===============================================================
+
     // Helper Functions
     function isAuthenticated() {
       return request.auth != null;
     }
     
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin') ||
+          (request.auth.token.email == "mykhilcreations6@gmail.com" && request.auth.token.email_verified == true)
+        );
+    }
+
     function isAuthorizedForSchool(schoolData) {
       return isAuthenticated() && (
         schoolData.get('adminUid', '') == request.auth.uid || 
-        (schoolData.get('authorizedUids', []) is list && request.auth.uid in schoolData.authorizedUids)
+        request.auth.uid in schoolData.get('authorizedUids', []) ||
+        isAdmin()
       );
     }
 
     function isSchoolAdmin(schoolId) {
-      return isAuthenticated() && schoolId != null && get(/databases/$(database)/documents/schools/$(schoolId)).data.get('adminUid', '') == request.auth.uid;
+      return isAuthenticated() && 
+             schoolId != null && 
+             exists(/databases/$(database)/documents/schools/$(schoolId)) &&
+             (get(/databases/$(database)/documents/schools/$(schoolId)).data.get('adminUid', '') == request.auth.uid || isAdmin());
     }
 
     // Users
@@ -27,29 +77,58 @@ service cloud.firestore {
 
     // Schools
     match /schools/{schoolId} {
-      // Use get() with default values for better query support
-      allow read: if isAuthenticated() && resource.data.get('adminUid', '') == request.auth.uid;
-      allow read: if isAuthenticated() && resource.data.get('authorizedUids', []) is list && request.auth.uid in resource.data.authorizedUids;
-      
+      allow read: if isAuthenticated() && (
+        resource.data.get('adminUid', '') == request.auth.uid || 
+        request.auth.uid in resource.data.get('authorizedUids', []) ||
+        isAdmin()
+      );
       allow create: if isAuthenticated() && request.resource.data.get('adminUid', '') == request.auth.uid;
       allow update: if isAuthenticated() && isSchoolAdmin(schoolId);
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     // Exams
     match /exams/{examId} {
-      allow read: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.get('schoolId', ''))).data);
-      allow create: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(request.resource.data.get('schoolId', ''))).data);
-      allow update: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.get('schoolId', ''))).data);
-      allow delete: if isAuthenticated() && isSchoolAdmin(resource.data.get('schoolId', ''));
+      allow read: if isAuthenticated() && 
+        resource.data.get('schoolId', null) != null &&
+        exists(/databases/$(database)/documents/schools/$(resource.data.schoolId)) &&
+        isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
+      
+      allow create: if isAuthenticated() && 
+        request.resource.data.get('schoolId', null) != null &&
+        exists(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)) &&
+        isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data);
+      
+      allow update: if isAuthenticated() && 
+        resource.data.get('schoolId', null) != null &&
+        exists(/databases/$(database)/documents/schools/$(resource.data.schoolId)) &&
+        isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
+      
+      allow delete: if isAuthenticated() && 
+        resource.data.get('schoolId', null) != null &&
+        isSchoolAdmin(resource.data.schoolId);
     }
 
     // Student Buckets
     match /studentBuckets/{bucketId} {
-      allow read: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.get('schoolId', ''))).data);
-      allow create: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(request.resource.data.get('schoolId', ''))).data);
-      allow update: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.get('schoolId', ''))).data);
-      allow delete: if isAuthenticated() && isSchoolAdmin(resource.data.get('schoolId', ''));
+      allow read: if isAuthenticated() && 
+        resource.data.get('schoolId', null) != null &&
+        exists(/databases/$(database)/documents/schools/$(resource.data.schoolId)) &&
+        isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
+      
+      allow create: if isAuthenticated() && 
+        request.resource.data.get('schoolId', null) != null &&
+        exists(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)) &&
+        isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data);
+      
+      allow update: if isAuthenticated() && 
+        resource.data.get('schoolId', null) != null &&
+        exists(/databases/$(database)/documents/schools/$(resource.data.schoolId)) &&
+        isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
+      
+      allow delete: if isAuthenticated() && 
+        resource.data.get('schoolId', null) != null &&
+        isSchoolAdmin(resource.data.schoolId);
     }
   }
 }

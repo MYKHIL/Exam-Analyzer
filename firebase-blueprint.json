@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "lastLogin": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "School": {
+      "title": "School",
+      "description": "School information and access control",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "authorizedUids": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "adminUid"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Exam details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "schoolId"]
+    },
+    "StudentBucket": {
+      "title": "StudentBucket",
+      "description": "Bucket of students and scores for an exam",
+      "type": "object",
+      "properties": {
+        "examId": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "students": { "type": "array" }
+      },
+      "required": ["examId", "schoolId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/schools/{schoolId}": { "schema": "School", "description": "Schools" },
+    "/exams/{examId}": { "schema": "Exam", "description": "Exams" },
+    "/studentBuckets/{bucketId}": { "schema": "StudentBucket", "description": "Student data buckets" }
+  }
+}
