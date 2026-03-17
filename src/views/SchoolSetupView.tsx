@@ -6,9 +6,8 @@ import { School, Building2, ArrowRight, LogOut, UserPlus, Key } from 'lucide-rea
 
 export default function SchoolSetupView() {
   const { user, logout } = useAuth();
-  const [mode, setMode] = useState<'register' | 'join' | 'code'>('register');
+  const [mode, setMode] = useState<'register' | 'code'>('register');
   const [schoolName, setSchoolName] = useState('');
-  const [schoolId, setSchoolId] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,39 +40,6 @@ export default function SchoolSetupView() {
     }
   };
 
-  const handleJoinSchool = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !schoolId.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const schoolRef = doc(db, 'schools', schoolId.trim());
-      const schoolSnap = await getDoc(schoolRef);
-
-      if (!schoolSnap.exists()) {
-        setError('School not found. Please check the ID.');
-        setLoading(false);
-        return;
-      }
-
-      await updateDoc(schoolRef, {
-        authorizedUids: arrayUnion(user.uid)
-      });
-
-      // Update user document with schoolId
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        schoolId: schoolId.trim()
-      });
-    } catch (error) {
-      console.error('Error joining school:', error);
-      setError('Failed to join school. You might not have permission or the ID is invalid.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleJoinWithCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !accessCode.trim()) return;
@@ -97,7 +63,8 @@ export default function SchoolSetupView() {
       // 1. Mark code as used
       await updateDoc(doc(db, 'teacherCodes', codeDoc.id), {
         isUsed: true,
-        usedBy: user.uid
+        usedBy: user.uid,
+        usedAt: new Date().toISOString()
       });
 
       // 2. Add user to school authorized list
@@ -106,12 +73,13 @@ export default function SchoolSetupView() {
         authorizedUids: arrayUnion(user.uid)
       });
 
-      // 3. Update user profile with assigned subjects
+      // 3. Update user profile with assigned subjects and the code used
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         schoolId: codeData.schoolId,
         assignedSubjects: codeData.assignedSubjects,
-        role: 'staff'
+        role: 'staff',
+        joinedWithCode: codeData.code
       });
 
     } catch (error) {
@@ -137,48 +105,36 @@ export default function SchoolSetupView() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-100 rounded-2xl">
             {mode === 'register' ? (
               <Building2 className="w-8 h-8 text-indigo-600" />
-            ) : mode === 'join' ? (
-              <UserPlus className="w-8 h-8 text-indigo-600" />
             ) : (
               <Key className="w-8 h-8 text-indigo-600" />
             )}
           </div>
           <h2 className="text-3xl font-bold text-gray-900">
-            {mode === 'register' ? 'Setup Your School' : mode === 'join' ? 'Join a School' : 'Use Access Code'}
+            {mode === 'register' ? 'Setup Your School' : 'Use Access Code'}
           </h2>
           <p className="text-gray-500">
             {mode === 'register' 
               ? "Welcome! Let's start by registering your school in the system."
-              : mode === 'join'
-              ? "Enter the School ID provided by your administrator to join an existing school."
-              : "Enter the special access code provided by your administrator to join with assigned subjects."}
+              : "Enter the specialized access code provided by your administrator to join with assigned subjects."}
           </p>
         </div>
 
-        <div className="flex p-1 bg-gray-100 rounded-2xl overflow-x-auto">
+        <div className="flex p-1 bg-gray-100 rounded-2xl">
           <button
             onClick={() => { setMode('register'); setError(null); }}
-            className={`flex-1 min-w-fit px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
+            className={`flex-1 px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
               mode === 'register' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Register
-          </button>
-          <button
-            onClick={() => { setMode('join'); setError(null); }}
-            className={`flex-1 min-w-fit px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
-              mode === 'join' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Join ID
+            Register School
           </button>
           <button
             onClick={() => { setMode('code'); setError(null); }}
-            className={`flex-1 min-w-fit px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
+            className={`flex-1 px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
               mode === 'code' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            Access Code
+            Join with Code
           </button>
         </div>
 
@@ -208,31 +164,6 @@ export default function SchoolSetupView() {
               className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-100"
             >
               {loading ? 'Creating...' : 'Register School'}
-              <ArrowRight className="w-5 h-5" />
-            </button>
-          </form>
-        )}
-
-        {mode === 'join' && (
-          <form onSubmit={handleJoinSchool} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700 ml-1">School ID</label>
-              <input
-                type="text"
-                required
-                value={schoolId}
-                onChange={(e) => setSchoolId(e.target.value)}
-                placeholder="Paste the School ID here"
-                className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || !schoolId.trim()}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-100"
-            >
-              {loading ? 'Joining...' : 'Join School'}
               <ArrowRight className="w-5 h-5" />
             </button>
           </form>

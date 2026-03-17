@@ -17,7 +17,7 @@ export default function ConfigurationView({
   const [newSubjectType, setNewSubjectType] = useState<'core' | 'elective'>('core');
   const [inviteEmail, setInviteEmail] = useState('');
   const [loadingInvite, setLoadingInvite] = useState(false);
-  const [authorizedUsers, setAuthorizedUsers] = useState<{ uid: string, email: string, displayName: string, assignedSubjects?: string[], role?: string }[]>([]);
+  const [authorizedUsers, setAuthorizedUsers] = useState<{ uid: string, email: string, displayName: string, assignedSubjects?: string[], role?: string, joinedWithCode?: string }[]>([]);
   const [teacherCodes, setTeacherCodes] = useState<any[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -412,43 +412,106 @@ export default function ConfigurationView({
               </button>
             </div>
 
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Active Codes</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {teacherCodes.filter(c => !c.isUsed).map(code => (
-                  <div key={code.id} className="p-4 border border-gray-200 rounded-xl bg-white shadow-sm flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-lg font-mono font-bold text-indigo-600 tracking-widest">{code.code}</span>
-                        <button 
-                          onClick={() => copyToClipboard(code.code)}
-                          className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
-                        >
-                          {copiedCode === code.code ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </button>
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Active Access Codes</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {teacherCodes.filter(c => !c.isUsed).map(code => (
+                    <div key={code.id} className="p-4 border border-gray-200 rounded-xl bg-white shadow-sm flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-lg font-mono font-bold text-indigo-600 tracking-widest">{code.code}</span>
+                          <button 
+                            onClick={() => copyToClipboard(code.code)}
+                            className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                          >
+                            {copiedCode === code.code ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {code.assignedSubjects.map((subId: string) => {
+                            const sub = subjects.find(s => s.id === subId);
+                            return (
+                              <span key={subId} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                {sub?.name || 'Unknown'}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {code.assignedSubjects.map((subId: string) => {
-                          const sub = subjects.find(s => s.id === subId);
-                          return (
-                            <span key={subId} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
-                              {sub?.name || 'Unknown'}
-                            </span>
-                          );
-                        })}
-                      </div>
+                      <button 
+                        onClick={() => handleDeleteCode(code.id)}
+                        className="mt-4 text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" /> Revoke Code
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteCode(code.id)}
-                      className="mt-4 text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3 h-3" /> Delete Code
-                    </button>
-                  </div>
-                ))}
-                {teacherCodes.filter(c => !c.isUsed).length === 0 && (
-                  <p className="text-sm text-gray-500 italic col-span-2">No active codes. Generate one above.</p>
-                )}
+                  ))}
+                  {teacherCodes.filter(c => !c.isUsed).length === 0 && (
+                    <p className="text-sm text-gray-500 italic col-span-2">No active codes. Generate one above.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Used Access Codes (History)</h4>
+                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-bottom border-gray-200">
+                        <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Code</th>
+                        <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">User</th>
+                        <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Subjects</th>
+                        <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Date</th>
+                        <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {teacherCodes.filter(c => c.isUsed).map(code => {
+                        const usedByMember = authorizedUsers.find(u => u.uid === code.usedBy);
+                        return (
+                          <tr key={code.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4 font-mono text-sm font-bold text-gray-600">{code.code}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium text-gray-900">{usedByMember?.displayName || 'Unknown'}</span>
+                                <span className="text-[10px] text-gray-500">{usedByMember?.email || code.usedBy}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-wrap gap-1">
+                                {code.assignedSubjects.map((subId: string) => (
+                                  <span key={subId} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                    {subjects.find(s => s.id === subId)?.name || 'Unknown'}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-xs text-gray-500">
+                              {code.usedAt ? new Date(code.usedAt).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <button 
+                                onClick={() => handleDeleteCode(code.id)}
+                                className="text-red-500 hover:text-red-700 p-1"
+                                title="Remove record"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {teacherCodes.filter(c => c.isUsed).length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 italic">
+                            No codes have been used yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -521,6 +584,9 @@ export default function ConfigurationView({
                         <div>
                           <p className="font-medium text-gray-900">{member.displayName}</p>
                           <p className="text-xs text-gray-500">{member.email}</p>
+                          {member.joinedWithCode && (
+                            <p className="text-[10px] text-indigo-500 font-bold mt-0.5">Joined via code: {member.joinedWithCode}</p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

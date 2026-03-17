@@ -99,9 +99,11 @@ service cloud.firestore {
         isSchoolAdmin(schoolId) || 
         (
           // Allow joining: only authorizedUids changes and it's adding the user's own UID
+          // AND the user must have a joinedWithCode set in their profile (set during the code verification flow)
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authorizedUids']) &&
           request.resource.data.authorizedUids.hasAll(resource.data.get('authorizedUids', [])) &&
-          request.auth.uid in request.resource.data.authorizedUids
+          request.auth.uid in request.resource.data.authorizedUids &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('joinedWithCode', '') != ''
         )
       );
       allow delete: if isAdmin();
@@ -113,7 +115,7 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isSchoolAdmin(request.resource.data.schoolId);
       allow update: if isAuthenticated() && (
         isSchoolAdmin(resource.data.schoolId) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isUsed', 'usedBy']))
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isUsed', 'usedBy', 'usedAt']))
       );
       allow delete: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
     }
