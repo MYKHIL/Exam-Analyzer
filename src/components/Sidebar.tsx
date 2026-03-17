@@ -1,6 +1,7 @@
-import { LayoutDashboard, Settings, Users, BarChart3, FileText, HelpCircle, BookOpen, LogOut } from 'lucide-react';
+import { LayoutDashboard, Settings, Users, BarChart3, FileText, HelpCircle, BookOpen, LogOut, Copy, Check } from 'lucide-react';
 import { logOut } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { useState } from 'react';
 
 export default function Sidebar({ 
   activeTab, 
@@ -14,6 +15,15 @@ export default function Sidebar({
   onSwitchExam: () => void
 }) {
   const { school, currentExam } = useAuth();
+  const [copied, setCopied] = useState(false);
+
+  const copySchoolId = () => {
+    if (!school?.id) return;
+    navigator.clipboard.writeText(school.id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'students', label: 'Students & Scores', icon: Users },
@@ -31,8 +41,19 @@ export default function Sidebar({
             <BarChart3 className="w-6 h-6" />
             Exam Analyzer
           </h1>
-          <div className="mt-2">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{school?.name}</p>
+          <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">School</p>
+            <p className="text-sm font-bold text-gray-700 truncate">{school?.name}</p>
+            <button 
+              onClick={copySchoolId}
+              className="mt-2 flex items-center gap-1.5 text-[10px] font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+            >
+              {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              {copied ? 'Copied ID!' : 'Copy School ID'}
+            </button>
+          </div>
+          <div className="mt-4">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Exam</p>
             <p className="text-sm font-medium text-gray-600 truncate">{currentExam?.name}</p>
           </div>
         </div>

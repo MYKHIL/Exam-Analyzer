@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   school: School | null;
   currentExam: Exam | null;
+  logout: () => Promise<void>;
   setCurrentExam: (exam: Exam | null) => void;
   setSchool: (school: School | null) => void;
 }
@@ -20,6 +21,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [school, setSchool] = useState<School | null>(null);
   const [currentExam, setCurrentExam] = useState<Exam | null>(null);
+
+  const logout = async () => {
+    try {
+      await auth.signOut();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -74,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, school, currentExam, setCurrentExam, setSchool }}>
+    <AuthContext.Provider value={{ user, loading, school, currentExam, logout, setCurrentExam, setSchool }}>
       {children}
     </AuthContext.Provider>
   );
