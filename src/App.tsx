@@ -21,7 +21,7 @@ import { collection, query, where, onSnapshot, doc, updateDoc, setDoc } from 'fi
 import { db, handleFirestoreError, OperationType } from './firebase';
 
 function AppContent() {
-  const { user, loading, school, currentExam, setCurrentExam } = useAuth();
+  const { user, userData, loading, school, currentExam, setCurrentExam } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [gradeScales, setGradeScales] = useState<GradeScale[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -170,7 +170,12 @@ function AppContent() {
       <GuideModal 
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
-        onDownloadTemplate={() => downloadTemplate(subjects)}
+        onDownloadTemplate={() => {
+          const filteredSubjects = userData?.role === 'staff' && userData?.assignedSubjects 
+            ? subjects.filter(s => userData.assignedSubjects.includes(s.id))
+            : subjects;
+          downloadTemplate(filteredSubjects, students);
+        }}
         onImportExcel={() => fileInputRef.current?.click()}
       />
     </div>

@@ -26,7 +26,7 @@ async function startServer() {
 
   // API Routes
   app.post('/api/admin/revoke-user', async (req, res) => {
-    const { targetUid, schoolId, requesterUid } = req.body;
+    const { targetUid, schoolId, requesterUid, resetCode } = req.body;
 
     if (!targetUid || !schoolId || !requesterUid) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -70,7 +70,7 @@ async function startServer() {
         }
       }
 
-      // 5. Cleanup any teacher codes used by this user
+      // 5. Cleanup or Reset any teacher codes used by this user
       const codesSnap = await db.collection('teacherCodes')
         .where('schoolId', '==', schoolId)
         .where('usedBy', '==', targetUid)
@@ -78,11 +78,19 @@ async function startServer() {
       
       const batch = db.batch();
       codesSnap.docs.forEach(doc => {
-        batch.delete(doc.ref);
+        if (resetCode) {
+          batch.update(doc.ref, {
+            isUsed: false,
+            usedBy: null,
+            usedAt: null
+          });
+        } else {
+          batch.delete(doc.ref);
+        }
       });
       await batch.commit();
 
-      res.json({ success: true, message: 'User revoked and deleted from all systems' });
+      res.json({ success: true, message: resetCode ? 'User revoked and code reset' : 'User revoked and deleted' });
     } catch (error: any) {
       console.error('Error revoking user:', error);
       res.status(500).json({ error: error.message });

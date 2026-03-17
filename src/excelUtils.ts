@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { Subject, Student } from './types';
 
-export const downloadTemplate = async (subjects: Subject[]) => {
+export const downloadTemplate = async (subjects: Subject[], students: Student[] = []) => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Template');
 
@@ -42,13 +42,19 @@ export const downloadTemplate = async (subjects: Subject[]) => {
     };
   });
 
-  // Add sample data
-  const sampleData = [
-    { name: 'John Doe', sex: 'M', ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: 75 }), {}) },
-    { name: 'Jane Smith', sex: 'F', ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: 82 }), {}) }
-  ];
+  // Use provided students if available, otherwise sample data
+  const rowData = students.length > 0 
+    ? students.map(s => ({
+        name: s.name,
+        sex: s.sex,
+        ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: s.scores[sub.id] ?? '' }), {})
+      }))
+    : [
+        { name: 'John Doe', sex: 'M', ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: 75 }), {}) },
+        { name: 'Jane Smith', sex: 'F', ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: 82 }), {}) }
+      ];
 
-  sampleData.forEach(data => {
+  rowData.forEach(data => {
     const row = worksheet.addRow(data);
     row.eachCell((cell, colNumber) => {
       cell.alignment = { vertical: 'middle', horizontal: colNumber > 2 ? 'center' : 'left' };
