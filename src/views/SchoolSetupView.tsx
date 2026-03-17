@@ -18,6 +18,7 @@ export default function SchoolSetupView() {
       await addDoc(collection(db, 'schools'), {
         name: schoolName.trim(),
         adminUid: user.uid,
+        authorizedUids: [],
         createdAt: new Date().toISOString()
       });
     } catch (error) {

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, setDoc, or } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { School, Exam } from '../types';
 
@@ -41,43 +41,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Fetch school where user is admin or authorized member
         const schoolsRef = collection(db, 'schools');
         
-        const qAdmin = query(schoolsRef, where('adminUid', '==', user.uid));
-        const qMember = query(schoolsRef, where('authorizedUids', 'array-contains', user.uid));
+        const q = query(schoolsRef, or(
+          where('adminUid', '==', user.uid),
+          where('authorizedUids', 'array-contains', user.uid)
+        ));
         
-        let unsubAdmin = () => {};
-        let unsubMember = () => {};
-
-        const handleSnapshot = (snapshot: any) => {
+        const unsubscribeSchool = onSnapshot(q, (snapshot) => {
           if (!snapshot.empty) {
+            // For now, we take the first school found
             const schoolData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as School;
             setSchool(schoolData);
-            setLoading(false);
-          }
-        };
-
-        unsubAdmin = onSnapshot(qAdmin, (snapshot) => {
-          if (!snapshot.empty) {
-            handleSnapshot(snapshot);
           } else {
-            // If not admin, check if member
-            unsubMember = onSnapshot(qMember, (memberSnapshot) => {
-              if (!memberSnapshot.empty) {
-                handleSnapshot(memberSnapshot);
-              } else {
-                setSchool(null);
-                setLoading(false);
-              }
-            }, (error) => {
-              handleFirestoreError(error, OperationType.LIST, 'schools');
-            });
+            setSchool(null);
           }
+          setLoading(false);
         }, (error) => {
           handleFirestoreError(error, OperationType.LIST, 'schools');
+          setLoading(false);
         });
 
         return () => {
-          unsubAdmin();
-          unsubMember();
+          unsubscribeSchool();
         };
       } else {
         setSchool(null);
