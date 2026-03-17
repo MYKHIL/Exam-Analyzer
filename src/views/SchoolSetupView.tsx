@@ -20,11 +20,18 @@ export default function SchoolSetupView() {
     setLoading(true);
     setError(null);
     try {
-      await addDoc(collection(db, 'schools'), {
+      const schoolRef = await addDoc(collection(db, 'schools'), {
         name: schoolName.trim(),
         adminUid: user.uid,
         authorizedUids: [],
         createdAt: new Date().toISOString()
+      });
+
+      // Update user document with schoolId
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        schoolId: schoolRef.id,
+        role: 'admin'
       });
     } catch (error) {
       console.error('Error creating school:', error);
@@ -52,6 +59,12 @@ export default function SchoolSetupView() {
 
       await updateDoc(schoolRef, {
         authorizedUids: arrayUnion(user.uid)
+      });
+
+      // Update user document with schoolId
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        schoolId: schoolId.trim()
       });
     } catch (error) {
       console.error('Error joining school:', error);

@@ -28,16 +28,41 @@ export default function ConfigurationView({
     if (!school?.id) return;
 
     const fetchAuthorizedUsers = async () => {
-      if (!school?.authorizedUids || school.authorizedUids.length === 0) {
-        setAuthorizedUsers([]);
-        return;
-      }
-
+      if (!school) return;
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('uid', 'in', school.authorizedUids));
-      const snapshot = await getDocs(q);
-      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      setAuthorizedUsers(users);
+      const usersMap = new Map<string, any>();
+
+      try {
+        // 1. Fetch by schoolId (catches everyone linked to the school)
+        const qBySchool = query(usersRef, where('schoolId', '==', school.id));
+        const snapBySchool = await getDocs(qBySchool);
+        snapBySchool.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.uid !== school.adminUid) {
+            usersMap.set(data.uid, { id: doc.id, ...data });
+          }
+        });
+
+        // 2. Fetch by authorizedUids (catches those missing schoolId but in the access list)
+        const uidsToFetch = (school.authorizedUids || []).filter(uid => !usersMap.has(uid) && uid !== school.adminUid);
+        
+        if (uidsToFetch.length > 0) {
+          // Process in batches of 30 due to Firestore 'in' query limits
+          for (let i = 0; i < uidsToFetch.length; i += 30) {
+            const batch = uidsToFetch.slice(i, i + 30);
+            const qByUid = query(usersRef, where('uid', 'in', batch));
+            const snapByUid = await getDocs(qByUid);
+            snapByUid.docs.forEach(doc => {
+              const data = doc.data();
+              usersMap.set(data.uid, { id: doc.id, ...data });
+            });
+          }
+        }
+
+        setAuthorizedUsers(Array.from(usersMap.values()));
+      } catch (error) {
+        console.error('Error fetching authorized users:', error);
+      }
     };
 
     fetchAuthorizedUsers();
@@ -130,17 +155,35 @@ export default function ConfigurationView({
 
   const handleRemoveMember = async (uid: string) => {
     if (!school) return;
-    if (!confirm('Are you sure you want to remove this member?')) return;
+    if (!confirm('Are you sure you want to revoke access for this member?')) return;
 
     try {
+      // 1. Remove from school authorized list
       const schoolRef = doc(db, 'schools', school.id);
       await updateDoc(schoolRef, {
         authorizedUids: arrayRemove(uid)
       });
-      alert('Member removed successfully!');
+
+      // 2. Clear user document fields
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('uid', '==', uid));
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        const userDoc = snapshot.docs[0];
+        await updateDoc(doc(db, 'users', userDoc.id), {
+          schoolId: null,
+          role: 'staff',
+          assignedSubjects: []
+        });
+      }
+
+      // 3. Update local state
+      setAuthorizedUsers(prev => prev.filter(u => u.uid !== uid));
+      alert('Access revoked successfully!');
     } catch (error) {
-      console.error('Error removing member:', error);
-      alert('Failed to remove member.');
+      console.error('Error revoking access:', error);
+      alert('Failed to revoke access.');
     }
   };
 
@@ -492,6 +535,7 @@ export default function ConfigurationView({
                         <button 
                           onClick={() => handleRemoveMember(member.uid)}
                           className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                          title="Revoke Access"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
