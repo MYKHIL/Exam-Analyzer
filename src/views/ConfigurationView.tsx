@@ -99,11 +99,47 @@ export default function ConfigurationView({
   };
 
   const handleDeleteCode = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this code?')) return;
+    const codeToRevoke = teacherCodes.find(c => c.id === id);
+    if (!codeToRevoke) return;
+
+    const message = codeToRevoke.isUsed 
+      ? 'This code has been used. Deleting it will also REVOKE access for the user who used it. Continue?'
+      : 'Are you sure you want to revoke this access code?';
+
+    if (!confirm(message)) return;
+
     try {
+      // 1. If used, revoke access for that user
+      if (codeToRevoke.isUsed && codeToRevoke.usedBy && school) {
+        // Remove from school authorized list
+        const schoolRef = doc(db, 'schools', school.id);
+        await updateDoc(schoolRef, {
+          authorizedUids: arrayRemove(codeToRevoke.usedBy)
+        });
+
+        // Clear user document fields
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('uid', '==', codeToRevoke.usedBy));
+        const snapshot = await getDocs(q);
+        
+        if (!snapshot.empty) {
+          const userDoc = snapshot.docs[0];
+          await updateDoc(doc(db, 'users', userDoc.id), {
+            schoolId: null,
+            role: 'staff',
+            assignedSubjects: [],
+            joinedWithCode: null
+          });
+        }
+      }
+
+      // 2. Delete the code document
       await deleteDoc(doc(db, 'teacherCodes', id));
+      
+      alert(codeToRevoke.isUsed ? 'Code deleted and user access revoked.' : 'Access code revoked.');
     } catch (error) {
       console.error('Error deleting code:', error);
+      alert('Failed to delete code.');
     }
   };
 

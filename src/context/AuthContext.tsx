@@ -51,6 +51,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               role: 'staff' // Default role
             }, { merge: true });
           }
+        }, (error) => {
+          console.error('User document listener error:', error);
+          setUserData(null);
         });
 
         // Fetch school where user is admin or authorized member
@@ -67,10 +70,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setSchool(schoolData);
           } else {
             setSchool(null);
+            setCurrentExam(null);
           }
           setLoading(false);
         }, (error) => {
-          handleFirestoreError(error, OperationType.LIST, 'schools');
+          // If we get a permission error, it likely means access was revoked
+          console.error('School listener error:', error);
+          setSchool(null);
+          setCurrentExam(null);
           setLoading(false);
         });
 
