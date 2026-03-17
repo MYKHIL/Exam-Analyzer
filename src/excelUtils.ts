@@ -42,17 +42,12 @@ export const downloadTemplate = async (subjects: Subject[], students: Student[] 
     };
   });
 
-  // Use provided students if available, otherwise sample data
-  const rowData = students.length > 0 
-    ? students.map(s => ({
-        name: s.name,
-        sex: s.sex,
-        ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: s.scores[sub.id] ?? '' }), {})
-      }))
-    : [
-        { name: 'John Doe', sex: 'M', ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: 75 }), {}) },
-        { name: 'Jane Smith', sex: 'F', ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: 82 }), {}) }
-      ];
+  // Use provided students if available
+  const rowData = students.map(s => ({
+    name: s.name,
+    sex: s.sex,
+    ...subjects.reduce((acc, sub) => ({ ...acc, [sub.id]: s.scores[sub.id] ?? '' }), {})
+  }));
 
   rowData.forEach(data => {
     const row = worksheet.addRow(data);
@@ -84,7 +79,8 @@ export const processExcelFile = (
   existingStudents: Student[], 
   schoolId: string,
   examId: string,
-  onComplete: (students: Student[]) => void
+  onComplete: (students: Student[]) => void,
+  allowedSubjectIds?: string[]
 ) => {
   const reader = new FileReader();
   reader.onload = (evt) => {
@@ -119,6 +115,9 @@ export const processExcelFile = (
 
       // Grid format
       subjects.forEach(sub => {
+        // If allowedSubjectIds is provided, only process subjects in that list
+        if (allowedSubjectIds && !allowedSubjectIds.includes(sub.id)) return;
+
         const scoreVal = row[sub.name];
         if (scoreVal !== undefined) {
           const score = parseFloat(scoreVal);
@@ -136,6 +135,9 @@ export const processExcelFile = (
       if (subjectName && scoreStr !== undefined) {
         const subject = subjects.find(s => s.name.toLowerCase() === subjectName.toLowerCase());
         if (subject) {
+          // If allowedSubjectIds is provided, only process subjects in that list
+          if (allowedSubjectIds && !allowedSubjectIds.includes(subject.id)) return;
+
           const score = parseFloat(scoreStr);
           if (!isNaN(score)) {
             student.scores[subject.id] = score;

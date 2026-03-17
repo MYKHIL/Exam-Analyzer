@@ -212,7 +212,7 @@ export default function StudentsView({
                 <th className="p-4 font-medium sticky left-[200px] bg-gray-50 z-10 border-r border-gray-200 min-w-[80px]">Sex</th>
                 <th className="p-4 font-medium text-center border-r border-gray-200 bg-gray-50">Agg. Pts</th>
                 {subjects.map(subject => (
-                  <th key={subject.id} className="p-4 font-medium min-w-[120px]">
+                  <th key={subject.id} className={`p-4 font-medium min-w-[120px] ${canEditSubject(subject.id) ? 'bg-indigo-50/50' : ''}`}>
                     <div className="flex flex-col">
                       <span className="text-gray-900">{subject.name}</span>
                       <span className={`text-[10px] uppercase tracking-wider ${subject.type === 'core' ? 'text-blue-600' : 'text-purple-600'}`}>
@@ -263,8 +263,9 @@ export default function StudentsView({
                       {subjects.map(subject => {
                         const score = student.scores[subject.id];
                         const grade = resolveGrade(score, gradeScales);
+                        const isEditable = canEditSubject(subject.id);
                         return (
-                          <td key={subject.id} className="p-2 relative group/cell">
+                          <td key={subject.id} className={`p-2 relative group/cell ${isEditable ? 'bg-indigo-50/20' : ''}`}>
                             <div className="flex items-center gap-2">
                               <input 
                                 type="text"
@@ -273,8 +274,8 @@ export default function StudentsView({
                                 onKeyDown={(e) => handleKeyDown(e, studentIdx, subject.id)}
                                 data-student-index={studentIdx}
                                 data-subject-id={subject.id}
-                                disabled={!canEditSubject(subject.id)}
-                                className={`w-16 px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${!canEditSubject(subject.id) ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''}`}
+                                disabled={!isEditable}
+                                className={`w-16 px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${!isEditable ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''}`}
                                 placeholder="-"
                               />
                               {grade && (
@@ -346,14 +347,15 @@ export default function StudentsView({
                     {subjects.map(subject => {
                       const score = student.scores[subject.id];
                       const grade = resolveGrade(score, gradeScales);
+                      const isEditable = canEditSubject(subject.id);
                       return (
-                        <div key={subject.id} className="bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        <div key={subject.id} className={`p-2 rounded-lg border transition-colors ${isEditable ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-100' : 'bg-gray-50 border-gray-100'}`}>
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-medium text-gray-500 uppercase truncate pr-1">
+                            <span className={`text-[10px] font-bold uppercase truncate pr-1 ${isEditable ? 'text-indigo-700' : 'text-gray-500'}`}>
                               {subject.name}
                             </span>
                             {grade && (
-                              <span className="text-[10px] font-bold text-indigo-600">
+                              <span className={`text-[10px] font-bold ${isEditable ? 'text-indigo-600' : 'text-gray-400'}`}>
                                 {grade.grade}
                               </span>
                             )}
@@ -363,8 +365,8 @@ export default function StudentsView({
                             inputMode="numeric"
                             value={score !== undefined ? score : ''}
                             onChange={(e) => handleUpdateScore(student.id, subject.id, e.target.value)}
-                            disabled={!canEditSubject(subject.id)}
-                            className={`w-full bg-white border border-gray-200 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${!canEditSubject(subject.id) ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''}`}
+                            disabled={!isEditable}
+                            className={`w-full bg-white border border-gray-200 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${!isEditable ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''}`}
                             placeholder="Score"
                           />
                         </div>

@@ -109,11 +109,14 @@ function AppContent() {
   const handleImportExcel = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
+    const allowedSubjectIds = userData?.role === 'staff' ? userData?.assignedSubjects : undefined;
+    
     processExcelFile(file, subjects, students, school.id, currentExam.id, (updatedStudents) => {
       handleSetStudents(updatedStudents);
       setIsGuideOpen(false);
       setActiveTab('students');
-    });
+    }, allowedSubjectIds);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
