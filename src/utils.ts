@@ -21,7 +21,7 @@ export const resolveGrade = (value: number | string | undefined, scales: GradeSc
   return scales.find(s => s.grade.toLowerCase() === stringValue) || null;
 };
 
-export const calculateStudentAggregate = (student: Student, subjects: Subject[], scales: GradeScale[]) => {
+export const calculateStudentAggregate = (student: Student, subjects: Subject[], scales: GradeScale[], activeSubjectIds?: Set<string>) => {
   let totalScore = 0;
   let subjectsCount = 0;
   let scoreCount = 0;
@@ -29,9 +29,15 @@ export const calculateStudentAggregate = (student: Student, subjects: Subject[],
   const coreGrades: {value: number | string, scale: GradeScale}[] = [];
   const electiveGrades: {value: number | string, scale: GradeScale}[] = [];
 
+  // Find the worst possible grade (highest points)
+  const worstGrade = scales.length > 0 ? scales.reduce((prev, current) => (prev.points > current.points) ? prev : current) : null;
+
   subjects.forEach(subject => {
     const value = student.scores[subject.id];
-    if (value !== undefined && value !== '') {
+    const hasValue = value !== undefined && value !== '';
+    const isActive = activeSubjectIds ? activeSubjectIds.has(subject.id) : false;
+
+    if (hasValue) {
       subjectsCount++;
       if (typeof value === 'number') {
         totalScore += value;
@@ -52,13 +58,17 @@ export const calculateStudentAggregate = (student: Student, subjects: Subject[],
           electiveGrades.push({ value, scale });
         }
       }
+    } else if (isActive && worstGrade) {
+      // Penalize for missing score in an active subject
+      if (subject.type === 'core') {
+        coreGrades.push({ value: '', scale: worstGrade });
+      } else {
+        electiveGrades.push({ value: '', scale: worstGrade });
+      }
     }
   });
 
-  // Sort electives by "best" points (lowest points is usually better in some systems, but here let's assume points are what we sum)
-  // Wait, in many systems (like WAEC/BECE), lower points (1) is better than higher points (9).
-  // The user's default aggRangeMin is 6 (best possible if 6 subjects * 1 point).
-  // So lower points is better.
+  // Sort electives by "best" points (lowest points is better)
   electiveGrades.sort((a, b) => a.scale.points - b.scale.points);
 
   const bestTwoElectives = electiveGrades.slice(0, 2);

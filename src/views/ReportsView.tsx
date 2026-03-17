@@ -16,6 +16,15 @@ export default function ReportsView({
   const [includeSubjectPerf, setIncludeSubjectPerf] = useState(true);
   const [includeGradeDist, setIncludeGradeDist] = useState(true);
 
+  // Identify active subjects (at least one student has a score)
+  const activeSubjectIds = new Set<string>();
+  subjects.forEach(subject => {
+    const hasScore = students.some(s => s.scores[subject.id] !== undefined && s.scores[subject.id] !== '');
+    if (hasScore) {
+      activeSubjectIds.add(subject.id);
+    }
+  });
+
   const handleExportPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
     doc.text("Exam Analyzer Report", 14, 15);
@@ -27,7 +36,7 @@ export default function ReportsView({
       
       const head = [['Student', 'Sex', ...subjects.map(s => s.name), 'Agg. Pts']];
       const body = students.map(s => {
-        const agg = calculateStudentAggregate(s, subjects, gradeScales);
+        const agg = calculateStudentAggregate(s, subjects, gradeScales, activeSubjectIds);
         const subjectGrades = subjects.map(sub => {
           const score = s.scores[sub.id];
           return resolveGrade(score, gradeScales)?.grade || '-';
@@ -143,7 +152,7 @@ export default function ReportsView({
 
       // Add Data
       students.forEach(s => {
-        const agg = calculateStudentAggregate(s, subjects, gradeScales);
+        const agg = calculateStudentAggregate(s, subjects, gradeScales, activeSubjectIds);
         const rowData = {
           name: s.name,
           sex: s.sex,

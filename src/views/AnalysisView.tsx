@@ -44,8 +44,17 @@ export default function AnalysisView({
       data.F.counts[i] = 0;
     }
 
+    // Identify active subjects (at least one student has a score)
+    const activeSubjectIds = new Set<string>();
+    subjects.forEach(subject => {
+      const hasScore = students.some(s => s.scores[subject.id] !== undefined && s.scores[subject.id] !== '');
+      if (hasScore) {
+        activeSubjectIds.add(subject.id);
+      }
+    });
+
     students.forEach(student => {
-      const agg = calculateStudentAggregate(student, subjects, gradeScales);
+      const agg = calculateStudentAggregate(student, subjects, gradeScales, activeSubjectIds);
       const pts = agg.aggregatePoints;
       const sex = student.sex || 'M';
       

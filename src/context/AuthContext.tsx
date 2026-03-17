@@ -71,13 +71,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else {
             setSchool(null);
             setCurrentExam(null);
+            // If user had a schoolId but now has no school access, they were likely revoked
+            // We should clear their schoolId in the user document to stay in sync
+            if (userData?.schoolId) {
+              const userRef = doc(db, 'users', user.uid);
+              setDoc(userRef, { schoolId: null, joinedWithCode: null }, { merge: true });
+            }
           }
           setLoading(false);
         }, (error) => {
-          // If we get a permission error, it likely means access was revoked
           console.error('School listener error:', error);
-          setSchool(null);
-          setCurrentExam(null);
+          if (error.code === 'permission-denied') {
+            setSchool(null);
+            setCurrentExam(null);
+            // Force logout on permission denied to ensure they go back to AuthView
+            auth.signOut();
+          }
           setLoading(false);
         });
 

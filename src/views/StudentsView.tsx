@@ -128,6 +128,15 @@ export default function StudentsView({
 
   const filteredStudents = localStudents.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
+  // Identify active subjects (at least one student has a score)
+  const activeSubjectIds = new Set<string>();
+  subjects.forEach(subject => {
+    const hasScore = localStudents.some(s => s.scores[subject.id] !== undefined && s.scores[subject.id] !== '');
+    if (hasScore) {
+      activeSubjectIds.add(subject.id);
+    }
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -224,7 +233,7 @@ export default function StudentsView({
                 </tr>
               ) : (
                 filteredStudents.map((student, studentIdx) => {
-                  const aggregate = calculateStudentAggregate(student, subjects, gradeScales);
+                  const aggregate = calculateStudentAggregate(student, subjects, gradeScales, activeSubjectIds);
                   return (
                     <tr key={student.id} className="hover:bg-gray-50/50 transition-colors group">
                       <td className="p-0 sticky left-0 bg-white group-hover:bg-gray-50/50 z-10 border-r border-gray-200">
@@ -299,7 +308,7 @@ export default function StudentsView({
             <div className="p-8 text-center text-gray-500">No students found.</div>
           ) : (
             filteredStudents.map((student) => {
-              const aggregate = calculateStudentAggregate(student, subjects, gradeScales);
+              const aggregate = calculateStudentAggregate(student, subjects, gradeScales, activeSubjectIds);
               return (
                 <div key={student.id} className="p-4 space-y-4">
                   <div className="flex justify-between items-start">

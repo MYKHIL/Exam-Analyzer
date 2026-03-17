@@ -6,13 +6,22 @@ export default function DashboardView({ students, subjects, gradeScales }: { stu
   const totalStudents = students.length;
   const totalSubjects = subjects.length;
   
-  const aggregates = students.map(s => calculateStudentAggregate(s, subjects, gradeScales));
+  // Identify active subjects (at least one student has a score)
+  const activeSubjectIds = new Set<string>();
+  subjects.forEach(subject => {
+    const hasScore = students.some(s => s.scores[subject.id] !== undefined && s.scores[subject.id] !== '');
+    if (hasScore) {
+      activeSubjectIds.add(subject.id);
+    }
+  });
+
+  const aggregates = students.map(s => calculateStudentAggregate(s, subjects, gradeScales, activeSubjectIds));
   const avgClassScore = aggregates.length > 0 ? aggregates.reduce((acc, curr) => acc + curr.averageScore, 0) / aggregates.length : 0;
   const avgClassAggregate = aggregates.length > 0 ? aggregates.reduce((acc, curr) => acc + curr.aggregatePoints, 0) / aggregates.length : 0;
 
   const topStudent = students.length > 0 ? students.reduce((prev, current) => {
-    const prevAgg = calculateStudentAggregate(prev, subjects, gradeScales);
-    const currAgg = calculateStudentAggregate(current, subjects, gradeScales);
+    const prevAgg = calculateStudentAggregate(prev, subjects, gradeScales, activeSubjectIds);
+    const currAgg = calculateStudentAggregate(current, subjects, gradeScales, activeSubjectIds);
     // Lower aggregate points is better in 1-9 system.
     // If aggregate points are equal, higher total score is better.
     if (prevAgg.aggregatePoints === currAgg.aggregatePoints) {
@@ -69,8 +78,8 @@ export default function DashboardView({ students, subjects, gradeScales }: { stu
                   <div>
                     <p className="font-semibold text-indigo-900">{topStudent.name}</p>
                     <p className="text-sm text-indigo-700 mt-1">
-                      Score: {calculateStudentAggregate(topStudent, subjects, gradeScales).totalScore} | 
-                      Aggregate: {calculateStudentAggregate(topStudent, subjects, gradeScales).aggregatePoints}
+                      Score: {calculateStudentAggregate(topStudent, subjects, gradeScales, activeSubjectIds).totalScore} | 
+                      Aggregate: {calculateStudentAggregate(topStudent, subjects, gradeScales, activeSubjectIds).aggregatePoints}
                     </p>
                   </div>
                   <Award className="w-8 h-8 text-indigo-500" />
@@ -87,7 +96,7 @@ export default function DashboardView({ students, subjects, gradeScales }: { stu
                   <div key={student.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
                     <span className="font-medium text-gray-700">{student.name}</span>
                     <span className="text-sm text-gray-500">
-                      {calculateStudentAggregate(student, subjects, gradeScales).subjectsCount} subjects
+                      {calculateStudentAggregate(student, subjects, gradeScales, activeSubjectIds).subjectsCount} subjects
                     </span>
                   </div>
                 ))}
