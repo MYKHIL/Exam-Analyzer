@@ -11,11 +11,19 @@ export default function StudentsView({
   students: Student[], setStudents: (s: Student[]) => void,
   subjects: Subject[], gradeScales: GradeScale[]
 }) {
-  const { school, currentExam } = useAuth();
+  const { school, currentExam, user, userData } = useAuth();
   const [localStudents, setLocalStudents] = useState<Student[]>(remoteStudents);
   const [hasChanges, setHasChanges] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isAdmin = school?.adminUid === user?.uid || userData?.role === 'admin';
+  const assignedSubjects = userData?.assignedSubjects || [];
+
+  const canEditSubject = (subjectId: string) => {
+    if (isAdmin) return true;
+    return assignedSubjects.includes(subjectId);
+  };
 
   useEffect(() => {
     setLocalStudents(remoteStudents);
@@ -24,6 +32,10 @@ export default function StudentsView({
 
   const handleAddStudent = () => {
     if (!school || !currentExam) return;
+    if (!isAdmin) {
+      alert('Only administrators can add new students.');
+      return;
+    }
     const hasEmptyName = localStudents.some(s => !s.name.trim());
     if (hasEmptyName) {
       alert('Please enter a name for all existing students before adding a new one.');
@@ -41,21 +53,29 @@ export default function StudentsView({
   };
 
   const handleRemoveStudent = (id: string) => {
+    if (!isAdmin) {
+      alert('Only administrators can remove students.');
+      return;
+    }
     setLocalStudents(localStudents.filter(s => s.id !== id));
     setHasChanges(true);
   };
 
   const handleUpdateStudentName = (id: string, newName: string) => {
+    if (!isAdmin) return;
     setLocalStudents(localStudents.map(s => s.id === id ? { ...s, name: newName } : s));
     setHasChanges(true);
   };
 
   const handleUpdateStudentSex = (id: string, newSex: 'M' | 'F') => {
+    if (!isAdmin) return;
     setLocalStudents(localStudents.map(s => s.id === id ? { ...s, sex: newSex } : s));
     setHasChanges(true);
   };
 
   const handleUpdateScore = (studentId: string, subjectId: string, valueStr: string) => {
+    if (!canEditSubject(subjectId)) return;
+
     const numericValue = valueStr === '' ? undefined : Number(valueStr);
     const finalValue = (numericValue === undefined || isNaN(numericValue)) ? valueStr : numericValue;
 
@@ -213,14 +233,16 @@ export default function StudentsView({
                           value={student.name}
                           placeholder="Enter student name"
                           onChange={(e) => handleUpdateStudentName(student.id, e.target.value)}
-                          className="w-full h-full p-4 bg-transparent outline-none focus:bg-indigo-50 font-medium text-gray-900"
+                          disabled={!isAdmin}
+                          className={`w-full h-full p-4 bg-transparent outline-none focus:bg-indigo-50 font-medium text-gray-900 ${!isAdmin ? 'cursor-not-allowed' : ''}`}
                         />
                       </td>
                       <td className="p-0 sticky left-[200px] bg-white group-hover:bg-gray-50/50 z-10 border-r border-gray-200">
                         <select
                           value={student.sex}
                           onChange={(e) => handleUpdateStudentSex(student.id, e.target.value as 'M' | 'F')}
-                          className="w-full h-full p-4 bg-transparent outline-none focus:bg-indigo-50 font-medium text-gray-900"
+                          disabled={!isAdmin}
+                          className={`w-full h-full p-4 bg-transparent outline-none focus:bg-indigo-50 font-medium text-gray-900 ${!isAdmin ? 'cursor-not-allowed' : ''}`}
                         >
                           <option value="M">M</option>
                           <option value="F">F</option>
@@ -242,7 +264,8 @@ export default function StudentsView({
                                 onKeyDown={(e) => handleKeyDown(e, studentIdx, subject.id)}
                                 data-student-index={studentIdx}
                                 data-subject-id={subject.id}
-                                className="w-16 px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                disabled={!canEditSubject(subject.id)}
+                                className={`w-16 px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${!canEditSubject(subject.id) ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''}`}
                                 placeholder="-"
                               />
                               {grade && (
@@ -331,7 +354,8 @@ export default function StudentsView({
                             inputMode="numeric"
                             value={score !== undefined ? score : ''}
                             onChange={(e) => handleUpdateScore(student.id, subject.id, e.target.value)}
-                            className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            disabled={!canEditSubject(subject.id)}
+                            className={`w-full bg-white border border-gray-200 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${!canEditSubject(subject.id) ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''}`}
                             placeholder="Score"
                           />
                         </div>

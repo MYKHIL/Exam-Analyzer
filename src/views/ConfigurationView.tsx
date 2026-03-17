@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { GradeScale, Subject, School } from '../types';
-import { Plus, Trash2, Users, UserPlus, ShieldCheck, Mail } from 'lucide-react';
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { Plus, Trash2, Users, UserPlus, ShieldCheck, Mail, Key, Copy, Check, BookOpen } from 'lucide-react';
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove, addDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -12,16 +12,21 @@ export default function ConfigurationView({
   gradeScales: GradeScale[], setGradeScales: (g: GradeScale[]) => void,
   subjects: Subject[], setSubjects: (s: Subject[]) => void
 }) {
-  const { school, user } = useAuth();
+  const { school, user, userData } = useAuth();
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectType, setNewSubjectType] = useState<'core' | 'elective'>('core');
   const [inviteEmail, setInviteEmail] = useState('');
   const [loadingInvite, setLoadingInvite] = useState(false);
-  const [authorizedUsers, setAuthorizedUsers] = useState<{ uid: string, email: string, displayName: string }[]>([]);
+  const [authorizedUsers, setAuthorizedUsers] = useState<{ uid: string, email: string, displayName: string, assignedSubjects?: string[], role?: string }[]>([]);
+  const [teacherCodes, setTeacherCodes] = useState<any[]>([]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const isAdmin = school?.adminUid === user?.uid;
+  const isSchoolAdmin = school?.adminUid === user?.uid || userData?.role === 'admin';
 
   useEffect(() => {
+    if (!school?.id) return;
+
     const fetchAuthorizedUsers = async () => {
       if (!school?.authorizedUids || school.authorizedUids.length === 0) {
         setAuthorizedUsers([]);
@@ -31,18 +36,62 @@ export default function ConfigurationView({
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('uid', 'in', school.authorizedUids));
       const snapshot = await getDocs(q);
-      const users = snapshot.docs.map(doc => doc.data() as { uid: string, email: string, displayName: string });
+      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       setAuthorizedUsers(users);
     };
 
     fetchAuthorizedUsers();
-  }, [school?.authorizedUids]);
+
+    // Listen to teacher codes
+    const codesRef = collection(db, 'teacherCodes');
+    const qCodes = query(codesRef, where('schoolId', '==', school.id));
+    const unsubscribeCodes = onSnapshot(qCodes, (snapshot) => {
+      setTeacherCodes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => unsubscribeCodes();
+  }, [school?.id, school?.authorizedUids]);
+
+  const handleGenerateCode = async () => {
+    if (!school || selectedSubjects.length === 0) {
+      alert('Please select at least one subject.');
+      return;
+    }
+
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    try {
+      await addDoc(collection(db, 'teacherCodes'), {
+        code,
+        schoolId: school.id,
+        assignedSubjects: selectedSubjects,
+        isUsed: false,
+        createdAt: new Date().toISOString()
+      });
+      setSelectedSubjects([]);
+    } catch (error) {
+      console.error('Error generating code:', error);
+    }
+  };
+
+  const handleDeleteCode = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this code?')) return;
+    try {
+      await deleteDoc(doc(db, 'teacherCodes', id));
+    } catch (error) {
+      console.error('Error deleting code:', error);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCode(text);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
 
   const handleAddMember = async () => {
     if (!inviteEmail.trim() || !school) return;
     setLoadingInvite(true);
     try {
-      // Find user by email
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('email', '==', inviteEmail.trim()));
       const snapshot = await getDocs(q);
@@ -52,14 +101,24 @@ export default function ConfigurationView({
         return;
       }
 
-      const targetUser = snapshot.docs[0].data();
+      const targetUserDoc = snapshot.docs[0];
+      const targetUserData = targetUserDoc.data();
       const schoolRef = doc(db, 'schools', school.id);
       
+      // 1. Add to school authorized list
       await updateDoc(schoolRef, {
-        authorizedUids: arrayUnion(targetUser.uid)
+        authorizedUids: arrayUnion(targetUserData.uid)
+      });
+
+      // 2. Update user document with schoolId and assigned subjects
+      await updateDoc(doc(db, 'users', targetUserDoc.id), {
+        schoolId: school.id,
+        assignedSubjects: selectedSubjects,
+        role: 'staff'
       });
 
       setInviteEmail('');
+      setSelectedSubjects([]);
       alert('Member added successfully!');
     } catch (error) {
       console.error('Error adding member:', error);
@@ -82,6 +141,33 @@ export default function ConfigurationView({
     } catch (error) {
       console.error('Error removing member:', error);
       alert('Failed to remove member.');
+    }
+  };
+
+  const handleUpdateRole = async (uid: string, newRole: 'admin' | 'staff') => {
+    if (!school) return;
+    if (uid === school.adminUid) {
+      alert("The school creator's role cannot be changed.");
+      return;
+    }
+
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('uid', '==', uid));
+      const snapshot = await getDocs(q);
+      
+      if (!snapshot.empty) {
+        await updateDoc(doc(db, 'users', snapshot.docs[0].id), {
+          role: newRole
+        });
+        
+        // Update local state
+        setAuthorizedUsers(prev => prev.map(u => u.uid === uid ? { ...u, role: newRole } : u));
+        alert(`Role updated to ${newRole}.`);
+      }
+    } catch (error) {
+      console.error('Error updating role:', error);
+      alert('Failed to update role.');
     }
   };
 
@@ -108,10 +194,10 @@ export default function ConfigurationView({
   };
 
   return (
-    <div className="space-y-8 max-w-5xl">
+    <div className="space-y-8 max-w-5xl pb-20">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Configuration</h2>
-        <p className="text-gray-500 mt-1">Manage grade scales and subjects.</p>
+        <p className="text-gray-500 mt-1">Manage grade scales, subjects, and team access.</p>
       </div>
 
       {/* Subjects Configuration */}
@@ -234,8 +320,100 @@ export default function ConfigurationView({
         </div>
       </div>
 
+      {/* Teacher Access Codes - Only for Admins */}
+      {isSchoolAdmin && (
+        <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-indigo-50 rounded-lg">
+              <Key className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Teacher Access Codes</h3>
+              <p className="text-sm text-gray-500">Generate codes for teachers with specific subject assignments.</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <h4 className="text-sm font-bold text-gray-700 mb-3">1. Select Subjects for Assignment</h4>
+              <div className="flex flex-wrap gap-2">
+                {subjects.map(subject => (
+                  <button
+                    key={subject.id}
+                    onClick={() => {
+                      if (selectedSubjects.includes(subject.id)) {
+                        setSelectedSubjects(selectedSubjects.filter(id => id !== subject.id));
+                      } else {
+                        setSelectedSubjects([...selectedSubjects, subject.id]);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                      selectedSubjects.includes(subject.id)
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
+                        : 'bg-white border-gray-200 text-gray-600 hover:border-indigo-300'
+                    }`}
+                  >
+                    {subject.name}
+                  </button>
+                ))}
+                {subjects.length === 0 && <p className="text-xs text-gray-400">Add subjects above first.</p>}
+              </div>
+              
+              <button
+                onClick={handleGenerateCode}
+                disabled={selectedSubjects.length === 0}
+                className="mt-4 w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Generate Teacher Access Code
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Active Codes</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {teacherCodes.filter(c => !c.isUsed).map(code => (
+                  <div key={code.id} className="p-4 border border-gray-200 rounded-xl bg-white shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-lg font-mono font-bold text-indigo-600 tracking-widest">{code.code}</span>
+                        <button 
+                          onClick={() => copyToClipboard(code.code)}
+                          className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                        >
+                          {copiedCode === code.code ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {code.assignedSubjects.map((subId: string) => {
+                          const sub = subjects.find(s => s.id === subId);
+                          return (
+                            <span key={subId} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+                              {sub?.name || 'Unknown'}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteCode(code.id)}
+                      className="mt-4 text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" /> Delete Code
+                    </button>
+                  </div>
+                ))}
+                {teacherCodes.filter(c => !c.isUsed).length === 0 && (
+                  <p className="text-sm text-gray-500 italic col-span-2">No active codes. Generate one above.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Team Management - Only for Admins */}
-      {isAdmin && (
+      {isSchoolAdmin && (
         <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-indigo-50 rounded-lg">
@@ -283,27 +461,63 @@ export default function ConfigurationView({
                       <p className="text-xs text-gray-500">{user?.email}</p>
                     </div>
                   </div>
-                  <span className="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full font-bold uppercase">Admin</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full font-bold uppercase">Creator</span>
+                    <span className="text-[10px] text-indigo-400 font-medium italic">Primary Admin</span>
+                  </div>
                 </div>
 
                 {/* Other members */}
                 {authorizedUsers.map(member => (
-                  <div key={member.uid} className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-white">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                        <Users className="w-5 h-5 text-gray-400" />
+                  <div key={member.uid} className="flex flex-col p-4 border border-gray-200 rounded-xl bg-white space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                          {member.role === 'admin' ? <ShieldCheck className="w-5 h-5 text-indigo-600" /> : <Users className="w-5 h-5 text-gray-400" />}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{member.displayName}</p>
+                          <p className="text-xs text-gray-500">{member.email}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{member.displayName}</p>
-                        <p className="text-xs text-gray-500">{member.email}</p>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={member.role || 'staff'}
+                          onChange={(e) => handleUpdateRole(member.uid, e.target.value as 'admin' | 'staff')}
+                          className="text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="staff">Staff</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <button 
+                          onClick={() => handleRemoveMember(member.uid)}
+                          className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => handleRemoveMember(member.uid)}
-                      className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    
+                    <div className="pt-2 border-t border-gray-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <BookOpen className="w-3 h-3 text-gray-400" />
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Assigned Subjects</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {member.assignedSubjects && member.assignedSubjects.length > 0 ? (
+                          member.assignedSubjects.map((subId: string) => {
+                            const sub = subjects.find(s => s.id === subId);
+                            return (
+                              <span key={subId} className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-medium border border-indigo-100">
+                                {sub?.name || 'Unknown'}
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span className="text-[10px] text-gray-400 italic">No subjects assigned. Full view access only.</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
                 

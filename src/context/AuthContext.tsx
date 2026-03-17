@@ -6,6 +6,7 @@ import { School, Exam } from '../types';
 
 interface AuthContextType {
   user: User | null;
+  userData: any | null;
   loading: boolean;
   school: School | null;
   currentExam: Exam | null;
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [school, setSchool] = useState<School | null>(null);
   const [currentExam, setCurrentExam] = useState<Exam | null>(null);
@@ -34,18 +36,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        try {
-          // Create/Update user document
-          const userRef = doc(db, 'users', user.uid);
-          await setDoc(userRef, {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            lastLogin: new Date().toISOString()
-          }, { merge: true });
-        } catch (error) {
-          console.error('Error updating user doc:', error);
-        }
+        // Listen to user document
+        const userRef = doc(db, 'users', user.uid);
+        const unsubscribeUser = onSnapshot(userRef, (doc) => {
+          if (doc.exists()) {
+            setUserData(doc.data());
+          } else {
+            // Create initial user doc if not exists
+            setDoc(userRef, {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+              lastLogin: new Date().toISOString(),
+              role: 'staff' // Default role
+            }, { merge: true });
+          }
+        });
 
         // Fetch school where user is admin or authorized member
         const schoolsRef = collection(db, 'schools');
@@ -57,7 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         const unsubscribeSchool = onSnapshot(q, (snapshot) => {
           if (!snapshot.empty) {
-            // For now, we take the first school found
             const schoolData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as School;
             setSchool(schoolData);
           } else {
@@ -70,9 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         return () => {
+          unsubscribeUser();
           unsubscribeSchool();
         };
       } else {
+        setUserData(null);
         setSchool(null);
         setCurrentExam(null);
         setLoading(false);
@@ -83,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, school, currentExam, logout, setCurrentExam, setSchool }}>
+    <AuthContext.Provider value={{ user, userData, loading, school, currentExam, logout, setCurrentExam, setSchool }}>
       {children}
     </AuthContext.Provider>
   );
