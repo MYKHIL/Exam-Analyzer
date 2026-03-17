@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { GradeScale, Subject, School } from '../types';
 import { Plus, Trash2, Users, UserPlus, ShieldCheck, Mail, Key, Copy, Check, BookOpen } from 'lucide-react';
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove, addDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove, addDoc, onSnapshot, deleteDoc, deleteField, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -111,7 +111,10 @@ export default function ConfigurationView({
           const text = await response.text();
           console.error('Non-JSON error response:', text);
           if (response.status === 404) {
-            throw new Error('API endpoint not found. If you are using a Vercel deployment, please note that backend features are only available in the AI Studio preview environment.');
+            // Return a special error object to indicate 404
+            const error = new Error('API_NOT_FOUND');
+            (error as any).status = 404;
+            throw error;
           }
           throw new Error(`Server returned ${response.status}: ${text.substring(0, 100)}...`);
         }
@@ -119,9 +122,53 @@ export default function ConfigurationView({
       
       return await response.json();
     } catch (error: any) {
+      if (error.status === 404 || error.message === 'API_NOT_FOUND') {
+        throw error;
+      }
       console.error(`Fetch error for ${url}:`, error);
       throw error;
     }
+  };
+
+  const handleRevokeClientSide = async (targetUid: string, resetCode: boolean = false) => {
+    if (!school || !user) return;
+    
+    console.log('Falling back to client-side revocation...');
+    const batch = writeBatch(db);
+
+    // 1. Remove from school authorizedUids
+    const schoolRef = doc(db, 'schools', school.id);
+    batch.update(schoolRef, {
+      authorizedUids: arrayRemove(targetUid)
+    });
+
+    // 2. Find and update/delete user document
+    const usersRef = collection(db, 'users');
+    const qUser = query(usersRef, where('uid', '==', targetUid));
+    const userSnap = await getDocs(qUser);
+    userSnap.docs.forEach(d => {
+      batch.delete(d.ref);
+    });
+
+    // 3. Cleanup or Reset any teacher codes used by this user
+    const codesRef = collection(db, 'teacherCodes');
+    const qCodes = query(codesRef, where('schoolId', '==', school.id), where('usedBy', '==', targetUid));
+    const codesSnap = await getDocs(qCodes);
+    
+    codesSnap.docs.forEach(d => {
+      if (resetCode) {
+        batch.update(d.ref, {
+          isUsed: false,
+          usedBy: null,
+          usedAt: null
+        });
+      } else {
+        batch.delete(d.ref);
+      }
+    });
+
+    await batch.commit();
+    console.log('Client-side revocation complete.');
   };
 
   const handleDeleteCode = async (id: string, reset: boolean = false) => {
@@ -137,18 +184,26 @@ export default function ConfigurationView({
     if (!confirm(message)) return;
 
     try {
-      // 1. If used, revoke access via backend API
+      // 1. If used, revoke access
       if (codeToRevoke.isUsed && codeToRevoke.usedBy && school && user) {
-        await handleSafeFetch('/api/admin/revoke-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            targetUid: codeToRevoke.usedBy,
-            schoolId: school.id,
-            requesterUid: user.uid,
-            resetCode: reset
-          })
-        });
+        try {
+          await handleSafeFetch('/api/admin/revoke-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              targetUid: codeToRevoke.usedBy,
+              schoolId: school.id,
+              requesterUid: user.uid,
+              resetCode: reset
+            })
+          });
+        } catch (apiError: any) {
+          if (apiError.status === 404 || apiError.message === 'API_NOT_FOUND') {
+            await handleRevokeClientSide(codeToRevoke.usedBy, reset);
+          } else {
+            throw apiError;
+          }
+        }
       }
 
       // 2. Delete the code document if not resetting
@@ -214,15 +269,23 @@ export default function ConfigurationView({
     if (!confirm('Are you sure you want to PERMANENTLY DELETE this user account and revoke all access?')) return;
 
     try {
-      await handleSafeFetch('/api/admin/revoke-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetUid: uid,
-          schoolId: school.id,
-          requesterUid: user.uid
-        })
-      });
+      try {
+        await handleSafeFetch('/api/admin/revoke-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetUid: uid,
+            schoolId: school.id,
+            requesterUid: user.uid
+          })
+        });
+      } catch (apiError: any) {
+        if (apiError.status === 404 || apiError.message === 'API_NOT_FOUND') {
+          await handleRevokeClientSide(uid);
+        } else {
+          throw apiError;
+        }
+      }
 
       // Update local state
       setAuthorizedUsers(prev => prev.filter(u => u.uid !== uid));
@@ -231,6 +294,35 @@ export default function ConfigurationView({
       console.error('Error revoking access:', error);
       alert(`Failed to revoke access: ${error.message}`);
     }
+  };
+
+  const handleDeleteSchoolClientSide = async () => {
+    if (!school || !user) return;
+    console.log('Falling back to client-side school deletion...');
+    
+    // 1. Delete related docs (exams, codes, students, results)
+    const collectionsToCleanup = ['exams', 'teacherCodes', 'students', 'results'];
+    for (const collName of collectionsToCleanup) {
+      const q = query(collection(db, collName), where('schoolId', '==', school.id));
+      const snap = await getDocs(q);
+      const batch = writeBatch(db);
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    // 2. Delete user documents
+    const uidsToDelete = [user.uid, ...(school.authorizedUids || [])];
+    const userBatch = writeBatch(db);
+    for (const uid of uidsToDelete) {
+      const q = query(collection(db, 'users'), where('uid', '==', uid));
+      const snap = await getDocs(q);
+      snap.docs.forEach(d => userBatch.delete(d.ref));
+    }
+    await userBatch.commit();
+
+    // 3. Delete the school document
+    await deleteDoc(doc(db, 'schools', school.id));
+    console.log('Client-side school deletion complete.');
   };
 
   const handleDeleteSchool = async () => {
@@ -245,14 +337,22 @@ export default function ConfigurationView({
     }
 
     try {
-      await handleSafeFetch('/api/admin/delete-school', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          schoolId: school.id,
-          requesterUid: user.uid
-        })
-      });
+      try {
+        await handleSafeFetch('/api/admin/delete-school', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schoolId: school.id,
+            requesterUid: user.uid
+          })
+        });
+      } catch (apiError: any) {
+        if (apiError.status === 404 || apiError.message === 'API_NOT_FOUND') {
+          await handleDeleteSchoolClientSide();
+        } else {
+          throw apiError;
+        }
+      }
 
       alert('School and all data deleted successfully. You will now be logged out.');
       window.location.reload();
