@@ -7,36 +7,49 @@ service cloud.firestore {
       return request.auth != null;
     }
     
+    function isAuthorizedForSchool(schoolData) {
+      return isAuthenticated() && (
+        schoolData.adminUid == request.auth.uid || 
+        (schoolData.authorizedUids != null && request.auth.uid in schoolData.authorizedUids)
+      );
+    }
+
     function isSchoolAdmin(schoolId) {
       return isAuthenticated() && get(/databases/$(database)/documents/schools/$(schoolId)).data.adminUid == request.auth.uid;
     }
 
-    function isExamOwner(examId) {
-      let exam = get(/databases/$(database)/documents/exams/$(examId)).data;
-      return isSchoolAdmin(exam.schoolId);
+    // Users
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isSchoolAdmin(resource.data.schoolId));
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isSchoolAdmin(resource.data.schoolId));
     }
 
     // Schools
     match /schools/{schoolId} {
-      allow read: if isAuthenticated();
+      // Use resource.data for read to allow queries
+      allow read: if isAuthenticated() && (
+        resource.data.adminUid == request.auth.uid || 
+        (resource.data.authorizedUids != null && request.auth.uid in resource.data.authorizedUids)
+      );
       allow create: if isAuthenticated() && request.resource.data.adminUid == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.adminUid == request.auth.uid;
-      allow delete: if false; // Schools shouldn't be easily deleted
+      allow update: if isAuthenticated() && isSchoolAdmin(schoolId);
+      allow delete: if false;
     }
 
     // Exams
     match /exams/{examId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isSchoolAdmin(request.resource.data.schoolId);
-      allow update: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
+      allow read: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
+      allow create: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data);
+      allow update: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
       allow delete: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
     }
 
-    // Students
-    match /students/{studentId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isSchoolAdmin(request.resource.data.schoolId);
-      allow update: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
+    // Student Buckets
+    match /studentBuckets/{bucketId} {
+      allow read: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
+      allow create: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(request.resource.data.schoolId)).data);
+      allow update: if isAuthenticated() && isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
       allow delete: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
     }
   }

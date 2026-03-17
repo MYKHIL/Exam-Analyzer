@@ -1,6 +1,9 @@
-import { useState } from 'react';
-import { GradeScale, Subject } from '../types';
-import { Plus, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { GradeScale, Subject, School } from '../types';
+import { Plus, Trash2, Users, UserPlus, ShieldCheck, Mail } from 'lucide-react';
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 
 export default function ConfigurationView({ 
   gradeScales, setGradeScales, 
@@ -9,8 +12,78 @@ export default function ConfigurationView({
   gradeScales: GradeScale[], setGradeScales: (g: GradeScale[]) => void,
   subjects: Subject[], setSubjects: (s: Subject[]) => void
 }) {
+  const { school, user } = useAuth();
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectType, setNewSubjectType] = useState<'core' | 'elective'>('core');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [loadingInvite, setLoadingInvite] = useState(false);
+  const [authorizedUsers, setAuthorizedUsers] = useState<{ uid: string, email: string, displayName: string }[]>([]);
+
+  const isAdmin = school?.adminUid === user?.uid;
+
+  useEffect(() => {
+    const fetchAuthorizedUsers = async () => {
+      if (!school?.authorizedUids || school.authorizedUids.length === 0) {
+        setAuthorizedUsers([]);
+        return;
+      }
+
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('uid', 'in', school.authorizedUids));
+      const snapshot = await getDocs(q);
+      const users = snapshot.docs.map(doc => doc.data() as { uid: string, email: string, displayName: string });
+      setAuthorizedUsers(users);
+    };
+
+    fetchAuthorizedUsers();
+  }, [school?.authorizedUids]);
+
+  const handleAddMember = async () => {
+    if (!inviteEmail.trim() || !school) return;
+    setLoadingInvite(true);
+    try {
+      // Find user by email
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', inviteEmail.trim()));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        alert('User not found. They must sign in to the app at least once before they can be added to a school.');
+        return;
+      }
+
+      const targetUser = snapshot.docs[0].data();
+      const schoolRef = doc(db, 'schools', school.id);
+      
+      await updateDoc(schoolRef, {
+        authorizedUids: arrayUnion(targetUser.uid)
+      });
+
+      setInviteEmail('');
+      alert('Member added successfully!');
+    } catch (error) {
+      console.error('Error adding member:', error);
+      alert('Failed to add member.');
+    } finally {
+      setLoadingInvite(false);
+    }
+  };
+
+  const handleRemoveMember = async (uid: string) => {
+    if (!school) return;
+    if (!confirm('Are you sure you want to remove this member?')) return;
+
+    try {
+      const schoolRef = doc(db, 'schools', school.id);
+      await updateDoc(schoolRef, {
+        authorizedUids: arrayRemove(uid)
+      });
+      alert('Member removed successfully!');
+    } catch (error) {
+      console.error('Error removing member:', error);
+      alert('Failed to remove member.');
+    }
+  };
 
   const handleAddSubject = () => {
     if (!newSubjectName.trim()) return;
@@ -160,6 +233,88 @@ export default function ConfigurationView({
           {gradeScales.length === 0 && <p className="text-gray-500 mt-4">No grade scales configured.</p>}
         </div>
       </div>
+
+      {/* Team Management - Only for Admins */}
+      {isAdmin && (
+        <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-indigo-50 rounded-lg">
+              <Users className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Team Management</h3>
+              <p className="text-sm text-gray-500">Manage who can access and edit school data.</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Mail className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input 
+                  type="email" 
+                  placeholder="Member's Google Email" 
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                />
+              </div>
+              <button 
+                onClick={handleAddMember}
+                disabled={loadingInvite || !inviteEmail.trim()}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+              >
+                <UserPlus className="w-4 h-4" />
+                {loadingInvite ? 'Adding...' : 'Add Member'}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Authorized Members</h4>
+              <div className="grid grid-cols-1 gap-3">
+                {/* Admin is always authorized */}
+                <div className="flex items-center justify-between p-4 border border-indigo-100 rounded-xl bg-indigo-50/30">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                      <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{user?.displayName} (You)</p>
+                      <p className="text-xs text-gray-500">{user?.email}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full font-bold uppercase">Admin</span>
+                </div>
+
+                {/* Other members */}
+                {authorizedUsers.map(member => (
+                  <div key={member.uid} className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                        <Users className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{member.displayName}</p>
+                        <p className="text-xs text-gray-500">{member.email}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleRemoveMember(member.uid)}
+                      className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                
+                {authorizedUsers.length === 0 && (
+                  <p className="text-sm text-gray-500 italic py-2">No additional members added yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

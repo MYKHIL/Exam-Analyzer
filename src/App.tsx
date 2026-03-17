@@ -17,8 +17,8 @@ import SchoolSetupView from './views/SchoolSetupView';
 import ExamSelectorView from './views/ExamSelectorView';
 import { downloadTemplate, processExcelFile } from './excelUtils';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
-import { db } from './firebase';
+import { collection, query, where, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from './firebase';
 
 function AppContent() {
   const { user, loading, school, currentExam, setCurrentExam } = useAuth();
@@ -41,14 +41,22 @@ function AppContent() {
     setSubjRanges(currentExam.subjRanges);
   }, [currentExam]);
 
-  // Sync Students from Firestore
+  // Sync Students from StudentBucket (Minimal Reads)
   useEffect(() => {
     if (!currentExam) return;
 
-    const q = query(collection(db, 'students'), where('examId', '==', currentExam.id));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const studentData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
-      setStudents(studentData);
+    const bucketId = `bucket_${currentExam.id}`;
+    const bucketRef = doc(db, 'studentBuckets', bucketId);
+    
+    const unsubscribe = onSnapshot(bucketRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setStudents(data.students || []);
+      } else {
+        setStudents([]);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `studentBuckets/${bucketId}`);
     });
 
     return () => unsubscribe();
@@ -63,37 +71,26 @@ function AppContent() {
         gradeScales: newGradeScales
       });
     } catch (error) {
-      console.error('Error updating exam config:', error);
+      handleFirestoreError(error, OperationType.UPDATE, `exams/${currentExam.id}`);
     }
   };
 
-  // Update Students in Firestore
+  // Update Students in StudentBucket (Minimal Writes)
   const handleSetStudents = async (newStudents: Student[]) => {
     if (!currentExam || !school) return;
 
-    const batch = writeBatch(db);
-    
-    // This is a simplified sync. In a real app, you'd track changes.
-    // For now, we'll handle additions and updates.
-    newStudents.forEach(s => {
-      const studentRef = doc(collection(db, 'students'), s.id);
-      batch.set(studentRef, {
-        ...s,
-        examId: currentExam.id,
-        schoolId: school.id
-      });
-    });
-
-    // Handle deletions
-    const deletedIds = students.filter(s => !newStudents.find(ns => ns.id === s.id)).map(s => s.id);
-    deletedIds.forEach(id => {
-      batch.delete(doc(db, 'students', id));
-    });
+    const bucketId = `bucket_${currentExam.id}`;
+    const bucketRef = doc(db, 'studentBuckets', bucketId);
 
     try {
-      await batch.commit();
+      await setDoc(bucketRef, {
+        examId: currentExam.id,
+        schoolId: school.id,
+        students: newStudents,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
     } catch (error) {
-      console.error('Error syncing students:', error);
+      handleFirestoreError(error, OperationType.WRITE, `studentBuckets/${bucketId}`);
     }
   };
 
@@ -180,10 +177,14 @@ function AppContent() {
   );
 }
 
+import ErrorBoundary from './components/ErrorBoundary';
+
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

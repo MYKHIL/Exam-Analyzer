@@ -25,6 +25,7 @@ export type School = {
   id: string;
   name: string;
   adminUid: string;
+  authorizedUids?: string[];
   createdAt: string;
 };
 

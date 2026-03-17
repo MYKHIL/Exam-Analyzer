@@ -1,28 +1,35 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Student, Subject, GradeScale } from '../types';
 import { resolveGrade, calculateStudentAggregate } from '../utils';
-import { Plus, Trash2, Search, Download, FileSpreadsheet } from 'lucide-react';
+import { Plus, Trash2, Search, Download, FileSpreadsheet, Save, RotateCcw } from 'lucide-react';
 import { downloadTemplate, processExcelFile } from '../excelUtils';
 import { useAuth } from '../context/AuthContext';
 
 export default function StudentsView({ 
-  students, setStudents, subjects, gradeScales 
+  students: remoteStudents, setStudents: saveStudents, subjects, gradeScales 
 }: { 
   students: Student[], setStudents: (s: Student[]) => void,
   subjects: Subject[], gradeScales: GradeScale[]
 }) {
   const { school, currentExam } = useAuth();
+  const [localStudents, setLocalStudents] = useState<Student[]>(remoteStudents);
+  const [hasChanges, setHasChanges] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    setLocalStudents(remoteStudents);
+    setHasChanges(false);
+  }, [remoteStudents]);
+
   const handleAddStudent = () => {
     if (!school || !currentExam) return;
-    const hasEmptyName = students.some(s => !s.name.trim());
+    const hasEmptyName = localStudents.some(s => !s.name.trim());
     if (hasEmptyName) {
       alert('Please enter a name for all existing students before adding a new one.');
       return;
     }
-    setStudents([...students, { 
+    setLocalStudents([...localStudents, { 
       id: crypto.randomUUID(), 
       name: '', 
       sex: 'M', 
@@ -30,25 +37,29 @@ export default function StudentsView({
       schoolId: school.id,
       examId: currentExam.id
     }]);
+    setHasChanges(true);
   };
 
   const handleRemoveStudent = (id: string) => {
-    setStudents(students.filter(s => s.id !== id));
+    setLocalStudents(localStudents.filter(s => s.id !== id));
+    setHasChanges(true);
   };
 
   const handleUpdateStudentName = (id: string, newName: string) => {
-    setStudents(students.map(s => s.id === id ? { ...s, name: newName } : s));
+    setLocalStudents(localStudents.map(s => s.id === id ? { ...s, name: newName } : s));
+    setHasChanges(true);
   };
 
   const handleUpdateStudentSex = (id: string, newSex: 'M' | 'F') => {
-    setStudents(students.map(s => s.id === id ? { ...s, sex: newSex } : s));
+    setLocalStudents(localStudents.map(s => s.id === id ? { ...s, sex: newSex } : s));
+    setHasChanges(true);
   };
 
   const handleUpdateScore = (studentId: string, subjectId: string, valueStr: string) => {
     const numericValue = valueStr === '' ? undefined : Number(valueStr);
     const finalValue = (numericValue === undefined || isNaN(numericValue)) ? valueStr : numericValue;
 
-    setStudents(students.map(s => {
+    setLocalStudents(localStudents.map(s => {
       if (s.id === studentId) {
         const newScores = { ...s.scores };
         if (finalValue === '' || finalValue === undefined) {
@@ -60,6 +71,17 @@ export default function StudentsView({
       }
       return s;
     }));
+    setHasChanges(true);
+  };
+
+  const handleSave = async () => {
+    await saveStudents(localStudents);
+    setHasChanges(false);
+  };
+
+  const handleDiscard = () => {
+    setLocalStudents(remoteStudents);
+    setHasChanges(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, studentIndex: number, subjectId: string) => {
@@ -77,11 +99,14 @@ export default function StudentsView({
     if (!school || !currentExam) return;
     const file = e.target.files?.[0];
     if (!file) return;
-    processExcelFile(file, subjects, students, school.id, currentExam.id, setStudents);
+    processExcelFile(file, subjects, localStudents, school.id, currentExam.id, (updated) => {
+      setLocalStudents(updated);
+      setHasChanges(true);
+    });
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const filteredStudents = students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredStudents = localStudents.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -91,6 +116,22 @@ export default function StudentsView({
           <p className="text-gray-500 mt-1">Fast entry grid for student scores.</p>
         </div>
         <div className="flex flex-wrap gap-3">
+          {hasChanges && (
+            <>
+              <button 
+                onClick={handleDiscard}
+                className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" /> Discard
+              </button>
+              <button 
+                onClick={handleSave}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-lg shadow-green-100"
+              >
+                <Save className="w-4 h-4" /> Save Changes
+              </button>
+            </>
+          )}
           <input 
             type="file" 
             accept=".xlsx, .xls" 

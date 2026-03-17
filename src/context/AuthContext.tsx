@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, getDoc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../firebase';
-import { School, Exam, Student } from '../types';
+import { collection, query, where, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import { School, Exam } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -25,21 +25,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        // Fetch school associated with user
+        try {
+          // Create/Update user document
+          const userRef = doc(db, 'users', user.uid);
+          await setDoc(userRef, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            lastLogin: new Date().toISOString()
+          }, { merge: true });
+        } catch (error) {
+          console.error('Error updating user doc:', error);
+        }
+
+        // Fetch school where user is admin or authorized member
         const schoolsRef = collection(db, 'schools');
-        const q = query(schoolsRef, where('adminUid', '==', user.uid));
         
-        const unsubscribeSchool = onSnapshot(q, (snapshot) => {
+        const qAdmin = query(schoolsRef, where('adminUid', '==', user.uid));
+        const qMember = query(schoolsRef, where('authorizedUids', 'array-contains', user.uid));
+        
+        let unsubAdmin = () => {};
+        let unsubMember = () => {};
+
+        const handleSnapshot = (snapshot: any) => {
           if (!snapshot.empty) {
             const schoolData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as School;
             setSchool(schoolData);
-          } else {
-            setSchool(null);
+            setLoading(false);
           }
-          setLoading(false);
+        };
+
+        unsubAdmin = onSnapshot(qAdmin, (snapshot) => {
+          if (!snapshot.empty) {
+            handleSnapshot(snapshot);
+          } else {
+            // If not admin, check if member
+            unsubMember = onSnapshot(qMember, (memberSnapshot) => {
+              if (!memberSnapshot.empty) {
+                handleSnapshot(memberSnapshot);
+              } else {
+                setSchool(null);
+                setLoading(false);
+              }
+            }, (error) => {
+              handleFirestoreError(error, OperationType.LIST, 'schools');
+            });
+          }
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, 'schools');
         });
 
-        return () => unsubscribeSchool();
+        return () => {
+          unsubAdmin();
+          unsubMember();
+        };
       } else {
         setSchool(null);
         setCurrentExam(null);

@@ -7,9 +7,23 @@
       "properties": {
         "name": { "type": "string", "description": "The name of the school." },
         "adminUid": { "type": "string", "description": "The UID of the school administrator." },
+        "authorizedUids": { "type": "array", "items": { "type": "string" }, "description": "List of UIDs authorized to access this school." },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "adminUid"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Represents a user in the system.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "staff"] }
+      },
+      "required": ["uid", "email", "schoolId", "role"]
     },
     "Exam": {
       "title": "Exam",
@@ -25,21 +39,36 @@
       },
       "required": ["name", "schoolId"]
     },
-    "Student": {
-      "title": "Student",
-      "description": "Represents a student and their scores for a specific exam.",
+    "StudentBucket": {
+      "title": "StudentBucket",
+      "description": "A bucket containing all students for a specific exam to minimize reads/writes.",
       "type": "object",
       "properties": {
+        "examId": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "students": { "type": "array", "items": { "$ref": "Student" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["examId", "schoolId", "students"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Represents a student and their scores.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
         "name": { "type": "string" },
         "sex": { "type": "string", "enum": ["M", "F"] },
-        "scores": { "type": "object" },
-        "examId": { "type": "string" },
-        "schoolId": { "type": "string" }
+        "scores": { "type": "object" }
       },
-      "required": ["name", "sex", "examId", "schoolId"]
+      "required": ["id", "name", "sex"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of users."
+    },
     "/schools/{schoolId}": {
       "schema": "School",
       "description": "Collection of schools."
@@ -48,9 +77,9 @@
       "schema": "Exam",
       "description": "Collection of exams."
     },
-    "/students/{studentId}": {
-      "schema": "Student",
-      "description": "Collection of students."
+    "/studentBuckets/{bucketId}": {
+      "schema": "StudentBucket",
+      "description": "Collection of student buckets (one per exam)."
     }
   }
 }
