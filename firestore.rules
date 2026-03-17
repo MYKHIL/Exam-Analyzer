@@ -111,10 +111,13 @@ service cloud.firestore {
 
     // Exams
     match /exams/{examId} {
-      allow read: if isAuthenticated() && 
-        resource.data.get('schoolId', null) != null &&
-        exists(/databases/$(database)/documents/schools/$(resource.data.schoolId)) &&
-        isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
+      allow read: if isAuthenticated() && (
+        resource == null || (
+          resource.data.get('schoolId', null) != null &&
+          exists(/databases/$(database)/documents/schools/$(resource.data.schoolId)) &&
+          isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data)
+        )
+      );
       
       allow create: if isAuthenticated() && 
         request.resource.data.get('schoolId', null) != null &&
@@ -133,10 +136,13 @@ service cloud.firestore {
 
     // Student Buckets
     match /studentBuckets/{bucketId} {
-      allow read: if isAuthenticated() && 
-        resource.data.get('schoolId', null) != null &&
-        exists(/databases/$(database)/documents/schools/$(resource.data.schoolId)) &&
-        isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data);
+      allow read: if isAuthenticated() && (
+        resource == null || (
+          resource.data.get('schoolId', null) != null &&
+          exists(/databases/$(database)/documents/schools/$(resource.data.schoolId)) &&
+          isAuthorizedForSchool(get(/databases/$(database)/documents/schools/$(resource.data.schoolId)).data)
+        )
+      );
       
       allow create: if isAuthenticated() && 
         request.resource.data.get('schoolId', null) != null &&

@@ -149,7 +149,7 @@ export default function ConfigurationView({
   };
 
   const handleAddMember = async () => {
-    if (!inviteEmail.trim() || !school) return;
+    if (!isSchoolAdmin || !inviteEmail.trim() || !school) return;
     setLoadingInvite(true);
     try {
       const usersRef = collection(db, 'users');
@@ -218,7 +218,7 @@ export default function ConfigurationView({
   };
 
   const handleUpdateRole = async (uid: string, newRole: 'admin' | 'staff') => {
-    if (!school) return;
+    if (!isSchoolAdmin || !school) return;
     if (uid === school.adminUid) {
       alert("The school creator's role cannot be changed.");
       return;
@@ -245,16 +245,20 @@ export default function ConfigurationView({
   };
 
   const handleAddSubject = () => {
-    if (!newSubjectName.trim()) return;
+    if (!isSchoolAdmin || !newSubjectName.trim()) return;
     setSubjects([...subjects, { id: crypto.randomUUID(), name: newSubjectName, type: newSubjectType }]);
     setNewSubjectName('');
   };
 
   const handleRemoveSubject = (id: string) => {
-    setSubjects(subjects.filter(s => s.id !== id));
+    const subject = subjects.find(s => s.id === id);
+    if (window.confirm(`Are you sure you want to delete "${subject?.name || 'this subject'}"? This will not delete existing scores but may affect reports.`)) {
+      setSubjects(subjects.filter(s => s.id !== id));
+    }
   };
 
   const handleAddGradeScale = () => {
+    if (!isSchoolAdmin) return;
     setGradeScales([...gradeScales, { id: crypto.randomUUID(), minScore: 0, maxScore: 0, grade: 'X', points: 0 }]);
   };
 
@@ -263,7 +267,10 @@ export default function ConfigurationView({
   };
 
   const handleRemoveGradeScale = (id: string) => {
-    setGradeScales(gradeScales.filter(g => g.id !== id));
+    if (!isSchoolAdmin) return;
+    if (window.confirm('Are you sure you want to delete this grade scale?')) {
+      setGradeScales(gradeScales.filter(g => g.id !== id));
+    }
   };
 
   return (
@@ -277,32 +284,34 @@ export default function ConfigurationView({
       <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Subjects</h3>
         
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <input 
-            type="text" 
-            placeholder="Subject Name" 
-            value={newSubjectName}
-            onChange={e => setNewSubjectName(e.target.value)}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-            onKeyDown={e => e.key === 'Enter' && handleAddSubject()}
-          />
-          <div className="flex gap-2">
-            <select 
-              value={newSubjectType}
-              onChange={e => setNewSubjectType(e.target.value as 'core' | 'elective')}
-              className="flex-1 md:flex-none px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white"
-            >
-              <option value="core">Core</option>
-              <option value="elective">Elective</option>
-            </select>
-            <button 
-              onClick={handleAddSubject}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shrink-0"
-            >
-              <Plus className="w-4 h-4" /> Add
-            </button>
+        {isSchoolAdmin && (
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <input 
+              type="text" 
+              placeholder="Subject Name" 
+              value={newSubjectName}
+              onChange={e => setNewSubjectName(e.target.value)}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              onKeyDown={e => e.key === 'Enter' && handleAddSubject()}
+            />
+            <div className="flex gap-2">
+              <select 
+                value={newSubjectType}
+                onChange={e => setNewSubjectType(e.target.value as 'core' | 'elective')}
+                className="flex-1 md:flex-none px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white"
+              >
+                <option value="core">Core</option>
+                <option value="elective">Elective</option>
+              </select>
+              <button 
+                onClick={handleAddSubject}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shrink-0"
+              >
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {subjects.map(subject => (
@@ -313,9 +322,11 @@ export default function ConfigurationView({
                   {subject.type.charAt(0).toUpperCase() + subject.type.slice(1)}
                 </span>
               </div>
-              <button onClick={() => handleRemoveSubject(subject.id)} className="text-gray-400 hover:text-red-500 transition-colors p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {isSchoolAdmin && (
+                <button onClick={() => handleRemoveSubject(subject.id)} className="text-gray-400 hover:text-red-500 transition-colors p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           ))}
           {subjects.length === 0 && <p className="text-gray-500 col-span-2">No subjects configured.</p>}
@@ -326,12 +337,14 @@ export default function ConfigurationView({
       <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900">Grade Scales</h3>
-          <button 
-            onClick={handleAddGradeScale}
-            className="text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1 text-sm bg-indigo-50 px-3 py-1.5 rounded-lg"
-          >
-            <Plus className="w-4 h-4" /> Add Scale
-          </button>
+          {isSchoolAdmin && (
+            <button 
+              onClick={handleAddGradeScale}
+              className="text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1 text-sm bg-indigo-50 px-3 py-1.5 rounded-lg"
+            >
+              <Plus className="w-4 h-4" /> Add Scale
+            </button>
+          )}
         </div>
 
         <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
@@ -342,7 +355,7 @@ export default function ConfigurationView({
                 <th className="pb-3 font-medium">Min Score</th>
                 <th className="pb-3 font-medium">Max Score</th>
                 <th className="pb-3 font-medium">Points</th>
-                <th className="pb-3 font-medium w-10"></th>
+                {isSchoolAdmin && <th className="pb-3 font-medium w-10"></th>}
               </tr>
             </thead>
             <tbody>
@@ -353,7 +366,8 @@ export default function ConfigurationView({
                       type="text" 
                       value={scale.grade}
                       onChange={e => handleUpdateGradeScale(scale.id, 'grade', e.target.value)}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
+                      disabled={!isSchoolAdmin}
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-gray-50 disabled:text-gray-500"
                     />
                   </td>
                   <td className="py-3 pr-4">
@@ -361,7 +375,8 @@ export default function ConfigurationView({
                       type="number" 
                       value={scale.minScore}
                       onChange={e => handleUpdateGradeScale(scale.id, 'minScore', Number(e.target.value))}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
+                      disabled={!isSchoolAdmin}
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-gray-50 disabled:text-gray-500"
                     />
                   </td>
                   <td className="py-3 pr-4">
@@ -369,7 +384,8 @@ export default function ConfigurationView({
                       type="number" 
                       value={scale.maxScore}
                       onChange={e => handleUpdateGradeScale(scale.id, 'maxScore', Number(e.target.value))}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
+                      disabled={!isSchoolAdmin}
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-gray-50 disabled:text-gray-500"
                     />
                   </td>
                   <td className="py-3 pr-4">
@@ -377,14 +393,17 @@ export default function ConfigurationView({
                       type="number" 
                       value={scale.points}
                       onChange={e => handleUpdateGradeScale(scale.id, 'points', Number(e.target.value))}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
+                      disabled={!isSchoolAdmin}
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-gray-50 disabled:text-gray-500"
                     />
                   </td>
-                  <td className="py-3">
-                    <button onClick={() => handleRemoveGradeScale(scale.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-gray-50 hover:bg-red-50 rounded-md transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
+                  {isSchoolAdmin && (
+                    <td className="py-3">
+                      <button onClick={() => handleRemoveGradeScale(scale.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-gray-50 hover:bg-red-50 rounded-md transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -1,6 +1,8 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import * as admin from 'firebase-admin';
+import { initializeApp, getApps, App } from 'firebase-admin/app';
+import { getFirestore, Firestore, FieldValue } from 'firebase-admin/firestore';
+import { getAuth, Auth } from 'firebase-admin/auth';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -8,24 +10,54 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize Firebase Admin
-const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf8'));
+// Lazy initialization for Firebase Admin
+let db: Firestore | null = null;
+let auth: Auth | null = null;
+let firebaseApp: App | null = null;
 
-admin.initializeApp({
-  projectId: firebaseConfig.projectId,
-});
-
-const db = admin.firestore();
-const auth = admin.auth();
+function getFirebaseAdmin() {
+  console.log('Getting Firebase Admin instances...');
+  if (!db || !auth) {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (!fs.existsSync(configPath)) {
+      console.error('Firebase config file not found at:', configPath);
+      throw new Error('Firebase configuration missing. Please set up Firebase first.');
+    }
+    
+    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    console.log('Firebase config loaded for project:', firebaseConfig.projectId);
+    
+    if (getApps().length === 0) {
+      console.log('Initializing new Firebase Admin app...');
+      firebaseApp = initializeApp({
+        projectId: firebaseConfig.projectId,
+      });
+    } else {
+      console.log('Using existing Firebase Admin app.');
+      firebaseApp = getApps()[0];
+    }
+    
+    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    auth = getAuth(firebaseApp);
+    console.log('Firebase Admin instances initialized.');
+  }
+  return { db, auth };
+}
 
 async function startServer() {
+  console.log('Starting server...');
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
 
+  // Health check route
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // API Routes
-  app.post('/api/admin/revoke-user', async (req, res) => {
+  app.post('/api/admin/revoke-user', async (req, res, next) => {
     const { targetUid, schoolId, requesterUid, resetCode } = req.body;
 
     if (!targetUid || !schoolId || !requesterUid) {
@@ -33,6 +65,7 @@ async function startServer() {
     }
 
     try {
+      const { db, auth } = getFirebaseAdmin();
       // 1. Verify requester is admin of the school
       const schoolDoc = await db.collection('schools').doc(schoolId).get();
       if (!schoolDoc.exists) {
@@ -52,7 +85,7 @@ async function startServer() {
 
       // 2. Remove from school authorizedUids
       await db.collection('schools').doc(schoolId).update({
-        authorizedUids: admin.firestore.FieldValue.arrayRemove(targetUid)
+        authorizedUids: FieldValue.arrayRemove(targetUid)
       });
 
       // 3. Delete user document from Firestore
@@ -92,12 +125,11 @@ async function startServer() {
 
       res.json({ success: true, message: resetCode ? 'User revoked and code reset' : 'User revoked and deleted' });
     } catch (error: any) {
-      console.error('Error revoking user:', error);
-      res.status(500).json({ error: error.message });
+      next(error);
     }
   });
 
-  app.post('/api/admin/delete-school', async (req, res) => {
+  app.post('/api/admin/delete-school', async (req, res, next) => {
     const { schoolId, requesterUid } = req.body;
 
     if (!schoolId || !requesterUid) {
@@ -105,6 +137,7 @@ async function startServer() {
     }
 
     try {
+      const { db, auth } = getFirebaseAdmin();
       // 1. Verify requester is the primary admin of the school
       const schoolDoc = await db.collection('schools').doc(schoolId).get();
       if (!schoolDoc.exists) {
@@ -149,18 +182,28 @@ async function startServer() {
 
       res.json({ success: true, message: 'School and all associated accounts deleted successfully' });
     } catch (error: any) {
-      console.error('Error deleting school:', error);
-      res.status(500).json({ error: error.message });
+      next(error);
     }
+  });
+
+  // Catch-all for API routes that don't exist
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({ error: `API route ${req.method} ${req.url} not found` });
   });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+    try {
+      console.log('Initializing Vite server...');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+      console.log('Vite middleware integrated.');
+    } catch (viteError) {
+      console.error('Failed to initialize Vite server:', viteError);
+    }
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
@@ -169,9 +212,22 @@ async function startServer() {
     });
   }
 
+  // Global Error Handler
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('Unhandled Error:', err);
+    res.status(err.status || 500).json({
+      error: err.message || 'An unexpected error occurred',
+      details: process.env.NODE_ENV !== 'production' ? err.stack : undefined
+    });
+  });
+
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server is listening on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error('CRITICAL: Failed to start server:', err);
+  process.exit(1);
+});
