@@ -57,7 +57,7 @@ async function startServer() {
   });
 
   // API Routes
-  app.post('/api/admin/revoke-user', async (req, res, next) => {
+  app.post(['/api/admin/revoke-user', '/api/admin/revoke-user/'], async (req, res, next) => {
     const { targetUid, schoolId, requesterUid, resetCode } = req.body;
 
     if (!targetUid || !schoolId || !requesterUid) {
@@ -129,7 +129,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/admin/delete-school', async (req, res, next) => {
+  app.post(['/api/admin/delete-school', '/api/admin/delete-school/'], async (req, res, next) => {
     const { schoolId, requesterUid } = req.body;
 
     if (!schoolId || !requesterUid) {
@@ -224,6 +224,14 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is listening on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // Log all registered routes
+    console.log('Registered Routes:');
+    app._router.stack.forEach((r: any) => {
+      if (r.route && r.route.path) {
+        console.log(`${Object.keys(r.route.methods).join(',').toUpperCase()} ${r.route.path}`);
+      }
+    });
   });
 }
 

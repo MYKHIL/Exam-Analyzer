@@ -98,6 +98,32 @@ export default function ConfigurationView({
     }
   };
 
+  const handleSafeFetch = async (url: string, options: RequestInit) => {
+    try {
+      const response = await fetch(url, options);
+      const contentType = response.headers.get('content-type');
+      
+      if (!response.ok) {
+        if (contentType && contentType.includes('application/json')) {
+          const err = await response.json();
+          throw new Error(err.error || `Server error: ${response.status}`);
+        } else {
+          const text = await response.text();
+          console.error('Non-JSON error response:', text);
+          if (response.status === 404) {
+            throw new Error('API endpoint not found. If you are using a Vercel deployment, please note that backend features are only available in the AI Studio preview environment.');
+          }
+          throw new Error(`Server returned ${response.status}: ${text.substring(0, 100)}...`);
+        }
+      }
+      
+      return await response.json();
+    } catch (error: any) {
+      console.error(`Fetch error for ${url}:`, error);
+      throw error;
+    }
+  };
+
   const handleDeleteCode = async (id: string, reset: boolean = false) => {
     const codeToRevoke = teacherCodes.find(c => c.id === id);
     if (!codeToRevoke) return;
@@ -113,7 +139,7 @@ export default function ConfigurationView({
     try {
       // 1. If used, revoke access via backend API
       if (codeToRevoke.isUsed && codeToRevoke.usedBy && school && user) {
-        const response = await fetch('/api/admin/revoke-user', {
+        await handleSafeFetch('/api/admin/revoke-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -123,11 +149,6 @@ export default function ConfigurationView({
             resetCode: reset
           })
         });
-
-        if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.error || 'Failed to revoke user');
-        }
       }
 
       // 2. Delete the code document if not resetting
@@ -193,7 +214,7 @@ export default function ConfigurationView({
     if (!confirm('Are you sure you want to PERMANENTLY DELETE this user account and revoke all access?')) return;
 
     try {
-      const response = await fetch('/api/admin/revoke-user', {
+      await handleSafeFetch('/api/admin/revoke-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -203,17 +224,41 @@ export default function ConfigurationView({
         })
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to revoke user');
-      }
-
       // Update local state
       setAuthorizedUsers(prev => prev.filter(u => u.uid !== uid));
       alert('User account deleted and access revoked successfully!');
     } catch (error: any) {
       console.error('Error revoking access:', error);
       alert(`Failed to revoke access: ${error.message}`);
+    }
+  };
+
+  const handleDeleteSchool = async () => {
+    if (!school || !user || school.adminUid !== user.uid) return;
+    
+    const confirmText = `DELETE ${school.name.toUpperCase()}`;
+    const input = prompt(`DANGER: This will PERMANENTLY DELETE the school, all exams, all student data, and ALL associated teacher accounts. This cannot be undone.\n\nTo confirm, type: ${confirmText}`);
+    
+    if (input !== confirmText) {
+      if (input !== null) alert('Incorrect confirmation text. Deletion cancelled.');
+      return;
+    }
+
+    try {
+      await handleSafeFetch('/api/admin/delete-school', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolId: school.id,
+          requesterUid: user.uid
+        })
+      });
+
+      alert('School and all data deleted successfully. You will now be logged out.');
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error deleting school:', error);
+      alert(`Failed to delete school: ${error.message}`);
     }
   };
 
@@ -693,6 +738,35 @@ export default function ConfigurationView({
                   <p className="text-sm text-gray-500 italic py-2">No additional members added yet.</p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Danger Zone - Only for Primary Admin */}
+      {school?.adminUid === user?.uid && (
+        <div className="bg-red-50 rounded-2xl p-4 md:p-6 shadow-sm border border-red-100">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-red-100 rounded-lg">
+              <Trash2 className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-red-900">Danger Zone</h3>
+              <p className="text-sm text-red-600">Irreversible administrative actions.</p>
+            </div>
+          </div>
+          
+          <div className="p-4 bg-white rounded-xl border border-red-200">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h4 className="font-bold text-gray-900">Delete School</h4>
+                <p className="text-sm text-gray-500">Permanently remove this school and all associated data, including teacher accounts.</p>
+              </div>
+              <button 
+                onClick={handleDeleteSchool}
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition-colors whitespace-nowrap"
+              >
+                Delete School
+              </button>
             </div>
           </div>
         </div>
