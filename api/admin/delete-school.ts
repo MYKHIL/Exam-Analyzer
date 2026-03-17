@@ -48,8 +48,9 @@ export default async function handler(req: any, res: any) {
     for (const uid of uidsToDelete) {
       try {
         await auth.deleteUser(uid);
-      } catch (e) {
-        // Ignore if user not found
+      } catch (e: any) {
+        console.warn(`Could not delete Auth account for ${uid}:`, e.message);
+        // Continue deleting other records
       }
     }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { collection, addDoc, doc, updateDoc, arrayUnion, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, arrayUnion, getDoc, getDocs, query, where, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { School, Building2, ArrowRight, LogOut, UserPlus, Key } from 'lucide-react';
@@ -26,12 +26,16 @@ export default function SchoolSetupView() {
         createdAt: new Date().toISOString()
       });
 
-      // Update user document with schoolId
+      // Create/Update user document with schoolId
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
+      await setDoc(userRef, {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
         schoolId: schoolRef.id,
-        role: 'admin'
-      });
+        role: 'admin',
+        lastLogin: new Date().toISOString()
+      }, { merge: true });
     } catch (error) {
       console.error('Error creating school:', error);
       setError('Failed to create school. Please try again.');
@@ -73,14 +77,18 @@ export default function SchoolSetupView() {
         authorizedUids: arrayUnion(user.uid)
       });
 
-      // 3. Update user profile with assigned subjects and the code used
+      // 3. Create/Update user profile with assigned subjects and the code used
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
+      await setDoc(userRef, {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
         schoolId: codeData.schoolId,
         assignedSubjects: codeData.assignedSubjects,
         role: 'staff',
-        joinedWithCode: codeData.code
-      });
+        joinedWithCode: codeData.code,
+        lastLogin: new Date().toISOString()
+      }, { merge: true });
 
     } catch (error) {
       console.error('Error joining with code:', error);

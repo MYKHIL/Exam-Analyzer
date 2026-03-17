@@ -38,21 +38,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         // Listen to user document
         const userRef = doc(db, 'users', user.uid);
-        const unsubscribeUser = onSnapshot(userRef, (doc) => {
-          if (doc.exists()) {
-            setUserData(doc.data());
+        const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setUserData(docSnap.data());
           } else {
-            // Create initial user doc if not exists
-            setDoc(userRef, {
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName,
-              lastLogin: new Date().toISOString(),
-              role: 'staff' // Default role
-            }, { merge: true });
+            // If we had userData before, and now it's gone, it's a revocation
+            // We use a functional update to check the previous state accurately
+            setUserData((prev: any) => {
+              if (prev && prev.uid === user.uid) {
+                console.warn('User document deleted. Access revoked.');
+                auth.signOut();
+                return null;
+              }
+              return null;
+            });
           }
         }, (error) => {
           console.error('User document listener error:', error);
+          if (error.code === 'permission-denied') {
+            auth.signOut();
+          }
           setUserData(null);
         });
 

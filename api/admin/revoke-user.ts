@@ -44,9 +44,8 @@ export default async function handler(req: any, res: any) {
     try {
       await auth.deleteUser(targetUid);
     } catch (authError: any) {
-      if (authError.code !== 'auth/user-not-found') {
-        console.error('Auth deletion error:', authError);
-      }
+      console.warn('Auth deletion error (likely missing credentials on Vercel):', authError.message);
+      // We continue because the Firestore data access is already revoked
     }
 
     // 5. Cleanup or Reset any teacher codes used by this user

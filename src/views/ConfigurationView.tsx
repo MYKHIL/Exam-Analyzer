@@ -198,11 +198,8 @@ export default function ConfigurationView({
             })
           });
         } catch (apiError: any) {
-          if (apiError.status === 404 || apiError.message === 'API_NOT_FOUND') {
-            await handleRevokeClientSide(codeToRevoke.usedBy, reset);
-          } else {
-            throw apiError;
-          }
+          console.warn('API revocation failed, falling back to client-side:', apiError.message);
+          await handleRevokeClientSide(codeToRevoke.usedBy, reset);
         }
       }
 
@@ -280,11 +277,8 @@ export default function ConfigurationView({
           })
         });
       } catch (apiError: any) {
-        if (apiError.status === 404 || apiError.message === 'API_NOT_FOUND') {
-          await handleRevokeClientSide(uid);
-        } else {
-          throw apiError;
-        }
+        console.warn('API revocation failed, falling back to client-side:', apiError.message);
+        await handleRevokeClientSide(uid);
       }
 
       // Update local state
@@ -347,11 +341,8 @@ export default function ConfigurationView({
           })
         });
       } catch (apiError: any) {
-        if (apiError.status === 404 || apiError.message === 'API_NOT_FOUND') {
-          await handleDeleteSchoolClientSide();
-        } else {
-          throw apiError;
-        }
+        console.warn('API school deletion failed, falling back to client-side:', apiError.message);
+        await handleDeleteSchoolClientSide();
       }
 
       alert('School and all data deleted successfully. You will now be logged out.');
