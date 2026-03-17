@@ -93,9 +93,9 @@ service cloud.firestore {
 
     // Schools
     match /schools/{schoolId} {
-      allow read: if hasUserDoc();
-      allow create: if hasUserDoc() && request.resource.data.get('adminUid', '') == request.auth.uid;
-      allow update: if hasUserDoc() && (
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.get('adminUid', '') == request.auth.uid;
+      allow update: if isAuthenticated() && (
         isSchoolAdmin(schoolId) || 
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authorizedUids']) &&
@@ -107,13 +107,13 @@ service cloud.firestore {
 
     // Teacher Codes
     match /teacherCodes/{codeId} {
-      allow read: if hasUserDoc();
-      allow create: if hasUserDoc() && isSchoolAdmin(request.resource.data.get('schoolId', ''));
-      allow update: if hasUserDoc() && (
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isSchoolAdmin(request.resource.data.get('schoolId', ''));
+      allow update: if isAuthenticated() && (
         isSchoolAdmin(resource.data.get('schoolId', '')) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isUsed', 'usedBy', 'usedAt']))
       );
-      allow delete: if hasUserDoc() && isSchoolAdmin(resource.data.get('schoolId', ''));
+      allow delete: if isAuthenticated() && isSchoolAdmin(resource.data.get('schoolId', ''));
     }
 
     // Exams

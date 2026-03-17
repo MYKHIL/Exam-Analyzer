@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, setDoc, or } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, setDoc, or, updateDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { School, Exam } from '../types';
 
@@ -80,18 +80,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // We should clear their schoolId in the user document to stay in sync
             if (userData?.schoolId) {
               const userRef = doc(db, 'users', user.uid);
-              setDoc(userRef, { schoolId: null, joinedWithCode: null }, { merge: true });
+              updateDoc(userRef, { schoolId: null, joinedWithCode: null });
             }
           }
           setLoading(false);
         }, (error) => {
           console.error('School listener error:', error);
-          if (error.code === 'permission-denied') {
-            setSchool(null);
-            setCurrentExam(null);
-            // Force logout on permission denied to ensure they go back to AuthView
-            auth.signOut();
-          }
+          setSchool(null);
+          setCurrentExam(null);
           setLoading(false);
         });
 
