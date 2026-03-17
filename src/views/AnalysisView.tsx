@@ -307,6 +307,7 @@ export default function AnalysisView({
                       <th key={g.id} colSpan={2} className="p-2 font-medium text-center border-r border-gray-200 border-b border-gray-200">Grade {g.grade}</th>
                     ))}
                     <th colSpan={2} className="p-2 font-medium text-center border-r border-gray-200 border-b border-gray-200">Total</th>
+                    <th colSpan={2} className="p-2 font-medium text-center border-r border-gray-200 border-b border-gray-200 bg-rose-50/50">Absent</th>
                     {subjRanges.map((r, idx) => (
                       <th key={r.id} colSpan={2} className="p-2 font-medium text-center border-r border-gray-200 border-b border-gray-200">Range {idx + 1} ({r.min}-{r.max})</th>
                     ))}
@@ -320,6 +321,8 @@ export default function AnalysisView({
                     ))}
                     <th className="p-2 font-medium text-center border-r border-gray-200">M</th>
                     <th className="p-2 font-medium text-center border-r border-gray-200">F</th>
+                    <th className="p-2 font-medium text-center border-r border-gray-200 text-rose-600">M</th>
+                    <th className="p-2 font-medium text-center border-r border-gray-200 text-rose-600">F</th>
                     {subjRanges.map(r => (
                       <React.Fragment key={r.id}>
                         <th className="p-2 font-medium text-center border-r border-gray-200 text-indigo-600">M</th>
@@ -340,6 +343,8 @@ export default function AnalysisView({
                       ))}
                       <td className="p-2 text-center border-r border-gray-200 font-semibold bg-gray-50/50">{row.total.M}</td>
                       <td className="p-2 text-center border-r border-gray-200 font-semibold bg-gray-50/50">{row.total.F}</td>
+                      <td className="p-2 text-center border-r border-gray-200 font-medium text-rose-600 bg-rose-50/20">{row.absent.M}</td>
+                      <td className="p-2 text-center border-r border-gray-200 font-medium text-rose-600 bg-rose-50/20">{row.absent.F}</td>
                       {subjRanges.map(r => (
                         <React.Fragment key={r.id}>
                           <td className="p-2 text-center border-r border-gray-200 font-bold text-indigo-600 bg-indigo-50/30">{row.ranges[r.id].M}</td>
@@ -358,12 +363,19 @@ export default function AnalysisView({
                 <div key={row.subject} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                   <h4 className="font-bold text-gray-900 mb-3 border-b border-gray-200 pb-2">{row.subject}</h4>
                   
-                  <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
                     <div className="bg-white p-2 rounded-lg border border-gray-100">
-                      <p className="text-[10px] text-gray-500 uppercase font-bold text-center mb-1">Total</p>
+                      <p className="text-[10px] text-gray-500 uppercase font-bold text-center mb-1">Total (Sat)</p>
                       <div className="flex justify-around">
                         <div className="text-center"><span className="text-[9px] text-gray-400 block">M</span><span className="font-bold">{row.total.M}</span></div>
                         <div className="text-center"><span className="text-[9px] text-gray-400 block">F</span><span className="font-bold">{row.total.F}</span></div>
+                      </div>
+                    </div>
+                    <div className="bg-rose-50 p-2 rounded-lg border border-rose-100">
+                      <p className="text-[10px] text-rose-600 uppercase font-bold text-center mb-1">Absent</p>
+                      <div className="flex justify-around">
+                        <div className="text-center"><span className="text-[9px] text-rose-400 block">M</span><span className="font-bold text-rose-700">{row.absent.M}</span></div>
+                        <div className="text-center"><span className="text-[9px] text-rose-400 block">F</span><span className="font-bold text-rose-700">{row.absent.F}</span></div>
                       </div>
                     </div>
                     {subjRanges.map((r, idx) => (

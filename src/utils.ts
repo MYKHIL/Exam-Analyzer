@@ -95,6 +95,7 @@ export const getSubjectSummaryData = (students: Student[], subjects: Subject[], 
       subject: subject.name,
       grades: {} as Record<string, { M: number, F: number }>,
       total: { M: 0, F: 0 },
+      absent: { M: 0, F: 0 },
       ranges: {} as Record<string, { M: number, F: number }>
     };
 
@@ -108,9 +109,10 @@ export const getSubjectSummaryData = (students: Student[], subjects: Subject[], 
 
     students.forEach(student => {
       const score = student.scores[subject.id];
+      const sex = student.sex || 'M';
+      
       if (score !== undefined && score !== '') {
         const gradeObj = resolveGrade(score, gradeScales);
-        const sex = student.sex || 'M';
         
         row.total[sex] += 1;
 
@@ -126,6 +128,8 @@ export const getSubjectSummaryData = (students: Student[], subjects: Subject[], 
             });
           }
         }
+      } else {
+        row.absent[sex] += 1;
       }
     });
 
