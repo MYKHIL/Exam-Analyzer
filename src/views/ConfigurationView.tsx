@@ -21,6 +21,9 @@ export default function ConfigurationView({
   const [teacherCodes, setTeacherCodes] = useState<any[]>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
+  const [editingSubjectName, setEditingSubjectName] = useState('');
+  const [editingSubjectType, setEditingSubjectType] = useState<'core' | 'elective'>('core');
 
   const isSchoolAdmin = school?.adminUid === user?.uid || userData?.role === 'admin';
 
@@ -386,6 +389,22 @@ export default function ConfigurationView({
     setNewSubjectName('');
   };
 
+  const handleEditSubject = (subject: Subject) => {
+    setEditingSubjectId(subject.id);
+    setEditingSubjectName(subject.name);
+    setEditingSubjectType(subject.type);
+  };
+
+  const handleSaveSubject = () => {
+    if (!editingSubjectId || !editingSubjectName.trim()) return;
+    setSubjects(subjects.map(s => s.id === editingSubjectId ? { ...s, name: editingSubjectName, type: editingSubjectType } : s));
+    setEditingSubjectId(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSubjectId(null);
+  };
+
   const handleRemoveSubject = (id: string) => {
     const subject = subjects.find(s => s.id === id);
     if (window.confirm(`Are you sure you want to delete "${subject?.name || 'this subject'}"? This will not delete existing scores but may affect reports.`)) {
@@ -452,16 +471,60 @@ export default function ConfigurationView({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {subjects.map(subject => (
             <div key={subject.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-gray-50">
-              <div>
-                <p className="font-medium text-gray-900">{subject.name}</p>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium mt-1 inline-block ${subject.type === 'core' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                  {subject.type.charAt(0).toUpperCase() + subject.type.slice(1)}
-                </span>
-              </div>
-              {isSchoolAdmin && (
-                <button onClick={() => handleRemoveSubject(subject.id)} className="text-gray-400 hover:text-red-500 transition-colors p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              {editingSubjectId === subject.id ? (
+                <div className="flex-1 flex flex-col gap-2">
+                  <input 
+                    type="text" 
+                    value={editingSubjectName}
+                    onChange={e => setEditingSubjectName(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <select 
+                      value={editingSubjectType}
+                      onChange={e => setEditingSubjectType(e.target.value as 'core' | 'elective')}
+                      className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-sm"
+                    >
+                      <option value="core">Core</option>
+                      <option value="elective">Elective</option>
+                    </select>
+                    <button 
+                      onClick={handleSaveSubject}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button 
+                      onClick={handleCancelEdit}
+                      className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <p className="font-medium text-gray-900">{subject.name}</p>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium mt-1 inline-block ${subject.type === 'core' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                      {subject.type.charAt(0).toUpperCase() + subject.type.slice(1)}
+                    </span>
+                  </div>
+                  {isSchoolAdmin && (
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleEditSubject(subject)} 
+                        className="text-indigo-600 hover:text-indigo-800 transition-colors p-2 bg-white rounded-lg border border-gray-200 shadow-sm text-xs font-bold uppercase"
+                      >
+                        Edit
+                      </button>
+                      <button onClick={() => handleRemoveSubject(subject.id)} className="text-gray-400 hover:text-red-500 transition-colors p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))}
