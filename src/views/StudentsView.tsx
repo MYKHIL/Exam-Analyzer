@@ -15,6 +15,8 @@ export default function StudentsView({
   const [localStudents, setLocalStudents] = useState<Student[]>(remoteStudents);
   const [hasChanges, setHasChanges] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'name' | 'sex' | 'aggregate'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = school?.adminUid === user?.uid || userData?.role === 'admin';
@@ -137,6 +139,39 @@ export default function StudentsView({
     }
   });
 
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    if (sortField === 'name') {
+      return sortOrder === 'asc' 
+        ? a.name.localeCompare(b.name)
+        : b.name.localeCompare(a.name);
+    }
+    if (sortField === 'sex') {
+      return sortOrder === 'asc'
+        ? a.sex.localeCompare(b.sex)
+        : b.sex.localeCompare(a.sex);
+    }
+    if (sortField === 'aggregate') {
+      const aggA = calculateStudentAggregate(a, subjects, gradeScales, activeSubjectIds).aggregatePoints;
+      const aggB = calculateStudentAggregate(b, subjects, gradeScales, activeSubjectIds).aggregatePoints;
+      return sortOrder === 'asc' ? aggA - aggB : aggB - aggA;
+    }
+    return 0;
+  });
+
+  const toggleSort = (field: 'name' | 'sex' | 'aggregate') => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: 'name' | 'sex' | 'aggregate' }) => {
+    if (sortField !== field) return <span className="ml-1 opacity-20">↕</span>;
+    return <span className="ml-1 text-indigo-600">{sortOrder === 'asc' ? '↑' : '↓'}</span>;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -189,8 +224,8 @@ export default function StudentsView({
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-4">
+        <div className="relative flex-1 max-w-md w-full">
           <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input 
             type="text" 
@@ -200,6 +235,24 @@ export default function StudentsView({
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
           />
         </div>
+        <div className="flex items-center gap-2 md:hidden w-full">
+          <span className="text-sm text-gray-500 font-medium">Sort by:</span>
+          <select 
+            value={sortField}
+            onChange={(e) => setSortField(e.target.value as any)}
+            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="name">Name</option>
+            <option value="sex">Sex</option>
+            <option value="aggregate">Aggregate Points</option>
+          </select>
+          <button 
+            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            className="p-2 bg-gray-50 border border-gray-200 rounded-lg text-indigo-600 font-bold"
+          >
+            {sortOrder === 'asc' ? '↑' : '↓'}
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -208,9 +261,30 @@ export default function StudentsView({
           <table className="w-full text-left border-collapse whitespace-nowrap">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
-                <th className="p-4 font-medium sticky left-0 bg-gray-50 z-10 border-r border-gray-200 min-w-[200px]">Student Name</th>
-                <th className="p-4 font-medium sticky left-[200px] bg-gray-50 z-10 border-r border-gray-200 min-w-[80px]">Sex</th>
-                <th className="p-4 font-medium text-center border-r border-gray-200 bg-gray-50">Agg. Pts</th>
+                <th 
+                  className="p-4 font-medium sticky left-0 bg-gray-50 z-10 border-r border-gray-200 min-w-[200px] cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => toggleSort('name')}
+                >
+                  <div className="flex items-center">
+                    Student Name <SortIcon field="name" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 font-medium sticky left-[200px] bg-gray-50 z-10 border-r border-gray-200 min-w-[80px] cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => toggleSort('sex')}
+                >
+                  <div className="flex items-center">
+                    Sex <SortIcon field="sex" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 font-medium text-center border-r border-gray-200 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => toggleSort('aggregate')}
+                >
+                  <div className="flex items-center justify-center">
+                    Agg. Pts <SortIcon field="aggregate" />
+                  </div>
+                </th>
                 {subjects.map(subject => (
                   <th key={subject.id} className={`p-4 font-medium min-w-[120px] ${canEditSubject(subject.id) ? 'bg-indigo-50/50' : ''}`}>
                     <div className="flex flex-col">
@@ -225,14 +299,14 @@ export default function StudentsView({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredStudents.length === 0 ? (
+              {sortedStudents.length === 0 ? (
                 <tr>
                   <td colSpan={subjects.length + 3} className="p-8 text-center text-gray-500">
                     No students found.
                   </td>
                 </tr>
               ) : (
-                filteredStudents.map((student, studentIdx) => {
+                sortedStudents.map((student, studentIdx) => {
                   const aggregate = calculateStudentAggregate(student, subjects, gradeScales, activeSubjectIds);
                   return (
                     <tr key={student.id} className="hover:bg-gray-50/50 transition-colors group">
@@ -305,10 +379,10 @@ export default function StudentsView({
 
         {/* Mobile Card View */}
         <div className="md:hidden divide-y divide-gray-100">
-          {filteredStudents.length === 0 ? (
+          {sortedStudents.length === 0 ? (
             <div className="p-8 text-center text-gray-500">No students found.</div>
           ) : (
-            filteredStudents.map((student) => {
+            sortedStudents.map((student) => {
               const aggregate = calculateStudentAggregate(student, subjects, gradeScales, activeSubjectIds);
               return (
                 <div key={student.id} className="p-4 space-y-4">
